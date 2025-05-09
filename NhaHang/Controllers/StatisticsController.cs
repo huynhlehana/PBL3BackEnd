@@ -45,7 +45,7 @@ namespace NhaHang.Controllers
         }
 
         [HttpGet]
-        [Route("/Statistics/TopFoods")]
+        [Route("TopFoods")]
         public IActionResult ThongKeTop10MonAnBanChay(int branchID, int month, int year)
         {
             var allFoods = dbc.Foods
