@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
 //builder.WebHost
        //.ConfigureKestrel(options =>
        //{
@@ -16,7 +17,36 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo { Title = "NhaHang API", Version = "v1" });
+
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "Nhập vào chuỗi token theo định dạng: Bearer {your token}"
+    });
+
+    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddAuthentication("Bearer")
@@ -36,10 +66,10 @@ builder.Services.AddAuthentication("Bearer")
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("AdminOnly", policy => policy.RequireRole("Quản Lý Tổng"));
-    options.AddPolicy("Management", policy => policy.RequireRole("Quản Lý Tổng", "Quản Lý Chi Nhánh"));
-    options.AddPolicy("AllStaff", policy => policy.RequireRole("Quản Lý Tổng", "Quản Lý Chi Nhánh", "Nhân Viên"));
-    options.AddPolicy("Everyone", policy => policy.RequireRole("Quản Lý Tổng", "Quản Lý Chi Nhánh", "Nhân Viên", "Khách Hàng"));
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("Quản lý tổng"));
+    options.AddPolicy("Management", policy => policy.RequireRole("Quản lý tổng", "Quản lý chi nhánh"));
+    options.AddPolicy("AllStaff", policy => policy.RequireRole("Quản lý tổng", "Quản lý chi nhánh", "Nhân viên"));
+    options.AddPolicy("Everyone", policy => policy.RequireAuthenticatedUser());
 });
 
 IConfigurationRoot cf = new ConfigurationBuilder().SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
@@ -49,6 +79,7 @@ builder.Services.AddDbContext<quanlynhahang>(opt => opt.UseSqlServer(cf.GetConne
 var app = builder.Build();
 
 app.UseSwagger();
+
 app.UseSwaggerUI();
 
 app.UseStaticFiles();

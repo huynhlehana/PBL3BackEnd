@@ -7,7 +7,6 @@ using NhaHang.ModelFromDB;
 using System.Security.Claims;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
-using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Authorization;
 
@@ -20,8 +19,9 @@ namespace NhaHang.Controllers
         private readonly IConfiguration _configuration;
         private readonly quanlynhahang dbc;
 
-        public UserController(quanlynhahang db)
+        public UserController(IConfiguration configuration, quanlynhahang db)
         {
+            _configuration = configuration;
             dbc = db;
         }
 
@@ -56,7 +56,6 @@ namespace NhaHang.Controllers
         }
 
         [HttpPost("/User/Login")]
-        [Authorize(Policy = "Everyone")]
         public IActionResult Login(string username, string password)
         {
             var user = dbc.Users
@@ -73,18 +72,19 @@ namespace NhaHang.Controllers
             var claims = new[]
             {
                 new Claim(ClaimTypes.Name, user.UserName),
-                new Claim(ClaimTypes.Role, user.Role.RoleName ?? "")
+                new Claim("UserId", user.UserId.ToString()),
+                new Claim(ClaimTypes.Role, user.Role.RoleName)
             };
 
-            var jwtSettings = _configuration.GetSection("JwtSettings");
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]));
+            var secretKey = _configuration["JwtSettings:SecretKey"];
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
-                issuer: jwtSettings["Issuer"],
-                audience: jwtSettings["Audience"],
+                issuer: "yourApp",
+                audience: "yourAppUsers",
                 claims: claims,
-                expires: DateTime.Now.AddHours(Convert.ToInt32(jwtSettings["ExpiryInHours"])),  // Sử dụng thời gian hết hạn từ cấu hình
+                expires: DateTime.Now.AddHours(1),
                 signingCredentials: creds
             );
 

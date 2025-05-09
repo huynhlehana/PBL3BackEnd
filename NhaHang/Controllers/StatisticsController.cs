@@ -25,20 +25,58 @@ namespace NhaHang.Controllers
             if (totalTables == 0)
                 return NotFound(new { message = "Chi nhánh không có bàn nào!" });
 
-            var usageStats = dbc.Bills
-                .Where(b => b.Table.BranchId == branchId && b.Created != null)
-                .AsEnumerable() 
-                .GroupBy(b => new { Hour = b.Created.Value.Hour, DayOfWeek = b.Created.Value.DayOfWeek })
-                .Select(g => new
+            var allHours = Enumerable.Range(0, 24).Where(h => h % 2 == 0).ToList();
+            var allDays = Enum.GetValues(typeof(DayOfWeek)).Cast<DayOfWeek>().ToList();
+            var allTimeSlots = allDays
+                .SelectMany(day => allHours, (day, hour) => Tuple.Create(hour, day))
+                .ToList();
+
+            var usageData = dbc.Bills
+                .Where(b => b.Table.BranchId == branchId && b.Created.HasValue)
+                .AsEnumerable()
+                .GroupBy(b =>
                 {
-                    Hour = g.Key.Hour,
-                    DayOfWeek = g.Key.DayOfWeek.ToString(),
-                    SoBanSuDung = g.Select(b => b.TableId).Distinct().Count(),
-                    TongBan = totalTables,
-                    TiLeSuDung = Math.Round((double)g.Select(b => b.TableId).Distinct().Count() * 100 / totalTables, 2)
+                    var time = b.Created.Value;
+                    int hourSlot = (time.Hour / 2) * 2;
+                    Console.WriteLine($"Hóa đơn {b.BillId}: Thời gian tạo {time}, Xếp vào khung giờ {hourSlot}:00 - {hourSlot + 1}:59");
+                    return Tuple.Create(hourSlot, time.DayOfWeek);
                 })
-                .OrderBy(s => s.DayOfWeek)
-                .ThenBy(s => s.Hour)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(b => b.TableId).Distinct().Count()
+                );
+
+            var usageStats = allTimeSlots
+                .Select(slot =>
+                {
+                    usageData.TryGetValue(slot, out int usedCount);
+
+                    int hour = slot.Item1;
+                    DayOfWeek day = slot.Item2;
+                    string timeRange = $"{hour:00}:00 - {hour + 1:00}:59";
+
+                    return new
+                    {
+                        Hour = hour,
+                        TimeRange = timeRange,
+                        DayOfWeek = day.ToString(),
+                        SoBanSuDung = usedCount,
+                        TongBan = totalTables,
+                        TiLeSuDung = Math.Round((double)usedCount * 100 / totalTables, 2),
+                        SortKey = (int)day
+                    };
+                })
+                .OrderBy(x => x.SortKey)
+                .ThenBy(x => x.Hour)
+                .Select(x => new
+                {
+                    x.Hour,
+                    x.TimeRange,
+                    x.DayOfWeek,
+                    x.SoBanSuDung,
+                    x.TongBan,
+                    x.TiLeSuDung
+                })
                 .ToList();
 
             return Ok(usageStats);
@@ -301,7 +339,7 @@ namespace NhaHang.Controllers
                 {
                     var doanhThu = billItems
                         .Where(bi => bi.Bill.BranchId == branch.BranchId)
-                        .Sum(bi => bi.Quantity * (bi.Food?.Price ?? 0)); // tránh null Food
+                        .Sum(bi => bi.Quantity * (bi.Food?.Price ?? 0));
 
                     return new
                     {
