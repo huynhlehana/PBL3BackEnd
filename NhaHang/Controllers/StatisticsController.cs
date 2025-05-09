@@ -8,7 +8,7 @@ namespace NhaHang.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Policy = "Management")]
+    //[Authorize(Policy = "Management")]
     public class StatisticsController : ControllerBase
     {
         private readonly quanlynhahang dbc;
