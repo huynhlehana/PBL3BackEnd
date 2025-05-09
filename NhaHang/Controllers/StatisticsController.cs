@@ -8,7 +8,7 @@ namespace NhaHang.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    //[Authorize(Policy = "Management")]
+    [Authorize(Policy = "Management")]
     public class StatisticsController : ControllerBase
     {
         private readonly quanlynhahang dbc;
@@ -45,7 +45,7 @@ namespace NhaHang.Controllers
         }
 
         [HttpGet]
-        [Route("TopFoods")]
+        [Route("/Statistics/TopFoods")]
         public IActionResult ThongKeTop10MonAnBanChay(int branchID, int month, int year)
         {
             var allFoods = dbc.Foods

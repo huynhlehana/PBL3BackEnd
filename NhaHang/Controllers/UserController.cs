@@ -27,7 +27,7 @@ namespace NhaHang.Controllers
 
         [HttpGet]
         [Authorize(Policy = "Management")]
-        [Route("ByBranch")]
+        [Route("/User/ByBranch")]
         public IActionResult LayDanhSachUserTheoChiNhanh(int branchID)
         {
             var dsUser = dbc.Users
