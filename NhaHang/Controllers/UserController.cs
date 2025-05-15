@@ -30,15 +30,26 @@ namespace NhaHang.Controllers
         [Route("/User/ByBranch")]
         public IActionResult LayDanhSachUserTheoChiNhanh(int branchID)
         {
+            var userIdClaim = User.FindFirst("UserId");
+            var roleClaim = User.FindFirst(ClaimTypes.Role);
+            var userId = int.Parse(userIdClaim.Value);
+            var role = roleClaim?.Value;
+
+            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == userId);
+            if (currentUser == null)
+                return Unauthorized(new { message = "Không xác định được người dùng!" });
+
+            if (role != "Quản lý tổng" && currentUser.BranchId != branchID)
+                return Unauthorized(new { message = "Bạn không có quyền truy cập danh sách user của chi nhánh này!" });
+
             var dsUser = dbc.Users
-                .Where(t => t.BranchId == branchID)
+                .Where(t => t.BranchId == branchID && t.UserId != userId)
                 .Include(t => t.Role)
                 .Include(t => t.Gender)
                 .Include(t => t.Branch)
                 .Select(t => new
                 {
                     t.UserId,
-                    t.UserName,
                     fullName = t.FirstName + " " + t.LastName,
                     t.PhoneNumber,
                     birthDay = t.BirthDay.ToString("yyyy-MM-dd"),
@@ -110,8 +121,14 @@ namespace NhaHang.Controllers
 
         [HttpPut("/User/Edit")]
         [Authorize(Policy = "Everyone")]
-        public IActionResult EditUser(int userId, string firstName, string lastName, string phoneNumber)
+        public IActionResult EditUser(string firstName, string lastName, string phoneNumber)
         {
+            var userIdClaim = User.FindFirst("UserId");
+            if (userIdClaim == null)
+                return Unauthorized(new { message = "Không tìm thấy thông tin người dùng trong token!" });
+
+            int userId = int.Parse(userIdClaim.Value);
+
             var user = dbc.Users.FirstOrDefault(u => u.UserId == userId);
             if (user == null)
                 return NotFound(new { message = "Người dùng không tồn tại!" });
@@ -126,8 +143,14 @@ namespace NhaHang.Controllers
 
         [HttpPost("/User/ChangePassword")]
         [Authorize(Policy = "Everyone")]
-        public IActionResult ChangePassword(int userId, string oldPassword, string newPassword)
+        public IActionResult ChangePassword(string oldPassword, string newPassword)
         {
+            var userIdClaim = User.FindFirst("UserId");
+            if (userIdClaim == null)
+                return Unauthorized(new { message = "Không tìm thấy thông tin người dùng trong token!" });
+
+            int userId = int.Parse(userIdClaim.Value);
+
             var user = dbc.Users.FirstOrDefault(u => u.UserId == userId);
             if (user == null)
                 return NotFound(new { message = "Người dùng không tồn tại!" });

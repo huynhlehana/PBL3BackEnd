@@ -51,7 +51,7 @@ public partial class User
     public DateTime? CreateAt { get; set; }
 
     [Column("branchID")]
-    public int BranchId { get; set; }
+    public int? BranchId { get; set; }
 
     [ForeignKey("BranchId")]
     [InverseProperty("Users")]
