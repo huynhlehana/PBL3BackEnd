@@ -1,8 +1,11 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using System;
+using System.Globalization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using NhaHang.ModelFromDB;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace NhaHang.Controllers
 {
@@ -58,10 +61,10 @@ namespace NhaHang.Controllers
                     return new
                     {
                         Hour = hour,
-                        TimeRange = timeRange,
+                        //TimeRange = timeRange,
                         DayOfWeek = day.ToString(),
-                        SoBanSuDung = usedCount,
-                        TongBan = totalTables,
+                        //SoBanSuDung = usedCount,
+                        //TongBan = totalTables,
                         TiLeSuDung = Math.Round((double)usedCount * 100 / totalTables, 2),
                         SortKey = (int)day
                     };
@@ -71,10 +74,10 @@ namespace NhaHang.Controllers
                 .Select(x => new
                 {
                     x.Hour,
-                    x.TimeRange,
+                    //x.TimeRange,
                     x.DayOfWeek,
-                    x.SoBanSuDung,
-                    x.TongBan,
+                    //x.SoBanSuDung,
+                    //x.TongBan,
                     x.TiLeSuDung
                 })
                 .ToList();
@@ -84,21 +87,25 @@ namespace NhaHang.Controllers
 
         [HttpGet]
         [Route("/Statistics/TopFoods")]
-        public IActionResult ThongKeTop10MonAnBanChay(int branchID, int month, int year)
+        public IActionResult ThongKeTop10MonAnBanChay(int branchID)
         {
+            DateTime today = DateTime.Now;
+            DateTime thirtyDaysAgo = today.AddDays(-30);
+
             var allFoods = dbc.Foods
                 .Select(f => new
                 {
                     f.FoodId,
-                    f.FoodName
+                    f.FoodName,
+                    f.Picture
                 })
                 .ToList();
 
             var foodSales = dbc.BillItems
                 .Include(bi => bi.Bill)
                 .Where(bi => bi.Bill.PaidDate != null
-                             && bi.Bill.PaidDate.Value.Month == month
-                             && bi.Bill.PaidDate.Value.Year == year
+                             && bi.Bill.PaidDate.Value >= thirtyDaysAgo
+                             && bi.Bill.PaidDate.Value <= today
                              && bi.Bill.BranchId == branchID)
                 .GroupBy(bi => bi.FoodId)
                 .Select(g => new
@@ -117,6 +124,7 @@ namespace NhaHang.Controllers
                     {
                         f.FoodId,
                         f.FoodName,
+                        f.Picture,
                         SoLuong = sales.FirstOrDefault()?.SoLuong ?? 0
                     })
                 .OrderByDescending(x => x.SoLuong) 
@@ -128,21 +136,25 @@ namespace NhaHang.Controllers
 
         [HttpGet]
         [Route("/Statistics/BottomFoods")]
-        public IActionResult ThongKeTop10MonAnItBanNhat(int branchID, int month, int year)
+        public IActionResult ThongKeTop10MonAnItBanNhat(int branchID)
         {
+            DateTime today = DateTime.Now;
+            DateTime thirtyDaysAgo = today.AddDays(-30);
+
             var allFoods = dbc.Foods
                 .Select(f => new
                 {
                     f.FoodId,
-                    f.FoodName
+                    f.FoodName,
+                    f.Picture
                 })
                 .ToList();
 
             var foodSales = dbc.BillItems
                 .Include(bi => bi.Bill)
                 .Where(bi => bi.Bill.PaidDate != null
-                             && bi.Bill.PaidDate.Value.Month == month
-                             && bi.Bill.PaidDate.Value.Year == year
+                             && bi.Bill.PaidDate.Value >= thirtyDaysAgo
+                             && bi.Bill.PaidDate.Value <= today
                              && bi.Bill.BranchId == branchID)
                 .GroupBy(bi => bi.FoodId)
                 .Select(g => new
@@ -161,6 +173,7 @@ namespace NhaHang.Controllers
                     {
                         f.FoodId,
                         f.FoodName,
+                        f.Picture,
                         SoLuong = sales.FirstOrDefault()?.SoLuong ?? 0
                     })
                 .OrderBy(x => x.SoLuong)
@@ -169,24 +182,41 @@ namespace NhaHang.Controllers
 
             return Ok(result);
         }
+        public enum TimeRange
+        {
+            SevenDays = 1,
+            OneMonth = 2,
+            TwelveMonths = 3,
+            FiveYears = 4
+        }
 
         [HttpGet]
         [Route("/Statistics/FoodRevenue")]
-        public IActionResult ThongKeDoanhThuTheoMonAn(int branchID, int month, int year)
+        public IActionResult ThongKeDoanhThuTheoMonAn(int branchID, TimeRange range)
         {
+            DateTime today = DateTime.Now;
+            DateTime startDate = range switch
+            {
+                TimeRange.SevenDays => today.AddDays(-6),
+                TimeRange.OneMonth => today.AddMonths(-1).AddDays(1),
+                TimeRange.TwelveMonths => today.AddMonths(-11),
+                TimeRange.FiveYears => today.AddYears(-4),
+                _ => today
+            };
+
             var allFoods = dbc.Foods
                 .Select(f => new
                 {
                     f.FoodId,
-                    f.FoodName
+                    f.FoodName,
                 })
                 .ToList();
 
             var foodRevenues = dbc.BillItems
                 .Include(bi => bi.Bill)
                 .Where(bi => bi.Bill.PaidDate != null
-                             && bi.Bill.PaidDate.Value.Month == month
-                             && bi.Bill.PaidDate.Value.Year == year
+                             && bi.Bill.PaidDate.Value >= startDate
+                             && bi.Bill.PaidDate.Value <= today
                              && bi.Bill.BranchId == branchID)
                 .GroupBy(bi => bi.FoodId)
                 .Select(g => new
@@ -217,8 +247,18 @@ namespace NhaHang.Controllers
 
         [HttpGet]
         [Route("/Statistics/FoodCategoryRevenue")]
-        public IActionResult ThongKeDoanhThuTheoDanhMuc(int branchID, int month, int year)
+        public IActionResult ThongKeDoanhThuTheoDanhMuc(int branchID, TimeRange range)
         {
+            DateTime today = DateTime.Now;
+            DateTime startDate = range switch
+            {
+                TimeRange.SevenDays => today.AddDays(-6),
+                TimeRange.OneMonth => today.AddMonths(-1).AddDays(1),
+                TimeRange.TwelveMonths => today.AddMonths(-11),
+                TimeRange.FiveYears => today.AddYears(-4),
+                _ => today
+            };
+
             var categories = dbc.Categories
                 .Select(c => new
                 {
@@ -230,8 +270,8 @@ namespace NhaHang.Controllers
             var foodSales = dbc.BillItems
                 .Include(bi => bi.Bill)
                 .Where(bi => bi.Bill.PaidDate != null
-                             && bi.Bill.PaidDate.Value.Month == month
-                             && bi.Bill.PaidDate.Value.Year == year
+                             && bi.Bill.PaidDate.Value >= startDate
+                             && bi.Bill.PaidDate.Value <= today
                              && bi.Bill.BranchId == branchID)
                 .GroupBy(bi => bi.Food.CategoryId)
                 .Select(g => new
@@ -261,78 +301,107 @@ namespace NhaHang.Controllers
         }
 
         [HttpGet]
-        [Route("/Statistics/DailyRevenue")]
-        public IActionResult ThongKeDoanhThuTheoNgay(int branchID, int month, int year)
+        [Route("/Statistics/Revenue")]
+        public IActionResult ThongKeDoanhThu(int branchID, TimeRange range)
         {
-            var daysInMonth = Enumerable.Range(1, DateTime.DaysInMonth(year, month))
-                .Select(day => new DateTime(year, month, day))
-                .ToList();
-
-            var doanhThuTheoNgay = dbc.BillItems
-                .Include(bi => bi.Bill)
-                .Include(bi => bi.Food)
-                .Where(bi => bi.Bill.PaidDate != null
-                             && bi.Bill.PaidDate.Value.Month == month
-                             && bi.Bill.PaidDate.Value.Year == year
-                             && bi.Bill.BranchId == branchID)
-                .AsEnumerable()
-                .GroupBy(bi => bi.Bill.PaidDate.Value.Date)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Sum(x => x.Quantity * x.Food.Price)
-                );
-
-            var result = daysInMonth.Select(date => new
+            DateTime today = DateTime.Now;
+            DateTime startDate = range switch
             {
-                Ngay = date.ToString("yyyy-MM-dd"),
-                TongDoanhThu = doanhThuTheoNgay.ContainsKey(date) ? doanhThuTheoNgay[date] : 0
-            })
-            .ToList();
+                TimeRange.SevenDays => today.AddDays(-6),
+                TimeRange.OneMonth => today.AddMonths(-1).AddDays(1),
+                TimeRange.TwelveMonths => today.AddMonths(-11),
+                TimeRange.FiveYears => today.AddYears(-4),
+                _ => today
+            };
 
-            return Ok(result);
-        }
-
-        [HttpGet]
-        [Route("/Statistics/MonthlyRevenue")]
-        public IActionResult ThongKeDoanhThuTheoThang(int branchID, int year)
-        {
-            var doanhThuTheoThang = dbc.BillItems
+            var doanhThu = dbc.BillItems
                 .Include(bi => bi.Bill)
                 .Include(bi => bi.Food)
                 .Where(bi => bi.Bill.PaidDate != null
-                             && bi.Bill.PaidDate.Value.Year == year
+                             && bi.Bill.PaidDate.Value >= startDate
+                             && bi.Bill.PaidDate.Value <= today
                              && bi.Bill.BranchId == branchID)
-                .AsEnumerable()
-                .GroupBy(bi => bi.Bill.PaidDate.Value.Month)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Sum(x => x.Quantity * x.Food.Price)
-                );
+                .AsEnumerable();
 
-            var result = Enumerable.Range(1, 12)
-                .Select(month => new
-                {
-                    Thang = month,
-                    TongDoanhThu = doanhThuTheoThang.ContainsKey(month) ? doanhThuTheoThang[month] : 0
-                })
-                .ToList();
+            List<object> result = range switch
+            {
+                TimeRange.SevenDays =>
+                    Enumerable.Range(0, 7)
+                        .Select(i => startDate.AddDays(i))
+                        .Select(date => new
+                        {
+                            Ngay = date.ToString("dddd"), 
+                            TongDoanhThu = doanhThu
+                                .Where(bi => bi.Bill.PaidDate.Value.Date == date.Date)
+                                .Sum(x => x.Quantity * x.Food.Price)
+                        }).ToList<object>(),
+
+                TimeRange.OneMonth =>
+                    Enumerable.Range(0, (today - startDate).Days + 1)
+                        .Select(i => startDate.AddDays(i))
+                        .Select(date => new
+                        {
+                            Ngay = $"Ngày {date.Day}/{date.Month}",
+                            TongDoanhThu = doanhThu
+                                .Where(bi => bi.Bill.PaidDate.Value.Date == date.Date)
+                                .Sum(x => x.Quantity * x.Food.Price)
+                        }).ToList<object>(),
+
+                TimeRange.TwelveMonths =>
+                    Enumerable.Range(0, 12)
+                        .Select(i => startDate.AddMonths(i))
+                        .Distinct()
+                        .OrderBy(m => m)
+                        .Select(date => new
+                        {
+                            Thang = $"Tháng {date.Month}/{date.Year}",
+                            TongDoanhThu = doanhThu
+                                .Where(bi => bi.Bill.PaidDate.Value.Month == date.Month
+                                             && bi.Bill.PaidDate.Value.Year == date.Year)
+                                .Sum(x => x.Quantity * x.Food.Price)
+                        }).ToList<object>(),
+
+                TimeRange.FiveYears =>
+                    Enumerable.Range(0, 5)
+                        .Select(i => today.AddYears(-i).Year)
+                        .OrderBy(y => y)
+                        .Select(year => new
+                        {
+                            Nam = year.ToString(),
+                            TongDoanhThu = doanhThu
+                                .Where(bi => bi.Bill.PaidDate.Value.Year == year)
+                                .Sum(x => x.Quantity * x.Food.Price)
+                        }).ToList<object>(),
+
+                _ => new List<object>()
+            };
 
             return Ok(result);
         }
 
         [HttpGet]
         [Route("/Statistics/RevenueByBranch")]
-        public IActionResult ThongKeTongDoanhThuTheoChiNhanh(int month, int year)
+        public IActionResult ThongKeTongDoanhThuTheoChiNhanh(TimeRange range)
         {
+            DateTime today = DateTime.Now;
+            DateTime startDate = range switch
+            {
+                TimeRange.SevenDays => today.AddDays(-6),
+                TimeRange.OneMonth => today.AddMonths(-1).AddDays(1),
+                TimeRange.TwelveMonths => today.AddMonths(-11),
+                TimeRange.FiveYears => today.AddYears(-4),
+                _ => today
+            };
+
             var allBranches = dbc.Branches.ToList();
 
             var billItems = dbc.BillItems
                 .Include(bi => bi.Bill)
                 .Include(bi => bi.Food)
                 .Where(bi => bi.Bill.PaidDate != null
-                           && bi.Bill.PaidDate.Value.Month == month
-                           && bi.Bill.PaidDate.Value.Year == year)
-                .ToList(); // tránh Lazy Loading lỗi
+                             && bi.Bill.PaidDate.Value >= startDate
+                             && bi.Bill.PaidDate.Value <= today)
+                .ToList();
 
             var result = allBranches
                 .Select(branch =>
@@ -348,7 +417,6 @@ namespace NhaHang.Controllers
                         TongDoanhThu = doanhThu
                     };
                 })
-                .OrderByDescending(r => r.TongDoanhThu)
                 .ToList();
 
             return Ok(result);
