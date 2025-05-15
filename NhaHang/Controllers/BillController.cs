@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using NhaHang.ModelFromDB;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace NhaHang.Controllers
 {
@@ -22,7 +23,20 @@ namespace NhaHang.Controllers
         [Route("/Bill/GetByTable")]
         public IActionResult LayHoaDonTheoBan(int tableId)
         {
+            var userIdClaim = User.FindFirst("UserId");
+            var roleClaim = User.FindFirst(ClaimTypes.Role);
+            var userId = int.Parse(userIdClaim.Value);
+            var role = roleClaim?.Value;
+
+            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == userId);
+            if (currentUser == null)
+                return Unauthorized(new { message = "Không xác định được người dùng!" });
+
             var table = dbc.Tables.Find(tableId);
+
+            if (currentUser.BranchId != table.BranchId)
+                return Unauthorized(new { message = "Bạn không có quyền truy cập hóa đơn của bàn thuộc chi nhánh khác." });
+
             if (table == null)
                 return NotFound(new { message = "Không tìm thấy bàn!" });
 
@@ -77,7 +91,19 @@ namespace NhaHang.Controllers
         [Route("/Bill/UpsertFood")]
         public IActionResult ThemOrCapNhatMon(int tableId, List<FoodOrderRequestcs> foodOrders)
         {
+            var userIdClaim = User.FindFirst("UserId");
+            var roleClaim = User.FindFirst(ClaimTypes.Role);
+            var userId = int.Parse(userIdClaim.Value);
+            var role = roleClaim?.Value;
+
+            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == userId);
+            if (currentUser == null)
+                return Unauthorized(new { message = "Không xác định được người dùng!" });
+
             var table = dbc.Tables.Find(tableId);
+
+            if (currentUser.BranchId != table.BranchId)
+                return Unauthorized(new { message = "Bạn không có quyền truy cập hóa đơn của bàn thuộc chi nhánh khác." });
 
             if (table == null || foodOrders == null || !foodOrders.Any())
                 return NotFound(new { message = "Không tìm thấy bàn hoặc món ăn!" });

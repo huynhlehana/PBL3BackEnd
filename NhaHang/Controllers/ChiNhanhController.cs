@@ -7,7 +7,7 @@ namespace NhaHang.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Policy = "AdminOnly")]
+    
     public class ChiNhanhController : ControllerBase
     {
         private readonly quanlynhahang dbc;
@@ -19,12 +19,14 @@ namespace NhaHang.Controllers
 
         [HttpGet]
         [Route("/Branch/List")]
+        [Authorize(Policy = "Everyone")]
         public IActionResult GetList()
         {
             return Ok(new { data = dbc.Branches.ToList() });
         }
 
         [HttpPost]
+        [Authorize(Policy = "AdminOnly")]
         [Route("/Branch/Add")]
         public IActionResult ThemChiNhanh(string TenChiNhanh, string DiaChi, string phone, string? image)
         {
@@ -39,6 +41,7 @@ namespace NhaHang.Controllers
         }
 
         [HttpPut]
+        [Authorize(Policy = "AdminOnly")]
         [Route("/Branch/Update")]
         public IActionResult CapNhatThongTinChiNhanh(int ID, string TenChiNhanh, string DiaChi, string phone, string? image)
         {
@@ -55,6 +58,7 @@ namespace NhaHang.Controllers
         }
 
         [HttpDelete]
+        [Authorize(Policy = "AdminOnly")]
         [Route("/Branch/Delete")]
         public IActionResult XoaChiNhanh(int ID)
         {

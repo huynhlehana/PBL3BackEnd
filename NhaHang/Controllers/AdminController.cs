@@ -1,45 +1,76 @@
-﻿using System;
-using System.Globalization;
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using NhaHang.ModelFromDB;
-using static System.Runtime.InteropServices.JavaScript.JSType;
+using Microsoft.EntityFrameworkCore;
 
 namespace NhaHang.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Policy = "Management")]
-    public class StatisticsController : ControllerBase
+    public class AdminController : ControllerBase
     {
         private readonly quanlynhahang dbc;
-        public StatisticsController(quanlynhahang db)
+        public AdminController(quanlynhahang db)
         {
             dbc = db;
         }
 
-        [HttpGet]
-        [Route("/Statistics/TableUtilizationRate")]
-        public IActionResult ThongKeTiLeSuDungBan(int branchId)
+        [HttpPost]
+        [Authorize(Policy = "Management")]
+        [Route("/Admin/Users/Create")]
+        public IActionResult TaoTaiKhoan(string username, string password, string fistname, string lastname, string phone, DateOnly birth, int genderId, int roleId, int branchId)
         {
-            var userIdClaim = User.FindFirst("UserId");
-            var roleClaim = User.FindFirst(ClaimTypes.Role);
-            var userId = int.Parse(userIdClaim.Value);
-            var role = roleClaim?.Value;
-
-            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == userId);
+            var currentUserId = int.Parse(User.FindFirst("UserId").Value);
+            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == currentUserId);
             if (currentUser == null)
                 return Unauthorized(new { message = "Không xác định được người dùng!" });
 
-            if (role != "Quản lý tổng" && currentUser.BranchId != branchId)
-                return Unauthorized(new { message = "Bạn không có quyền xem thống kê của chi nhánh này!" });
+            if (dbc.Users.Any(u => u.UserName == username || u.PhoneNumber == phone))
+                return Conflict(new { message = "Tên đăng nhập hoặc số điện thoại đã tồn tại!" });
 
-            var totalTables = dbc.Tables.Count(t => t.BranchId == branchId);
-            if (totalTables == 0)
-                return NotFound(new { message = "Chi nhánh không có bàn nào!" });
+            var newUser = new User
+            {
+                UserName = username,
+                Password = password,
+                FirstName = fistname,
+                LastName = lastname,
+                PhoneNumber = phone,
+                BirthDay = birth,
+                GenderId = genderId,
+                RoleId = roleId,
+                BranchId = currentUser.RoleId == 2 ? currentUser.BranchId : branchId,
+                CreateAt = DateTime.Now
+            };
+
+            if (currentUser.RoleId == 1)
+            {
+                if (roleId != 2 && roleId != 3)
+                    return BadRequest(new { message = "Chỉ được tạo quản lý chi nhánh hoặc nhân viên!" });
+            }
+            else if (currentUser.RoleId == 2)
+            {
+                if (roleId != 3)
+                    return Unauthorized(new { message = "Bạn chỉ được tạo tài khoản nhân viên!" });
+            }
+            else
+            {
+                return Unauthorized(new { message = "Bạn không có quyền tạo tài khoản!" });
+            }
+
+            dbc.Users.Add(newUser);
+            dbc.SaveChanges();
+
+            return Ok(new { message = "Tạo tài khoản thành công!", data = newUser });
+        }
+
+        [HttpGet]
+        [Authorize(Policy = "AdminOnly")]
+        [Route("/Admin/Statistics/TableUtilizationRate")]
+        public IActionResult ThongKeTiLeSuDungBan()
+        {
+            var totalTables = dbc.Tables.Count();
 
             var allHours = Enumerable.Range(6, 16).Where(h => h % 2 == 0).ToList();
             var allDays = Enum.GetValues(typeof(DayOfWeek)).Cast<DayOfWeek>().ToList();
@@ -48,7 +79,7 @@ namespace NhaHang.Controllers
                 .ToList();
 
             var usageData = dbc.Bills
-                .Where(b => b.Table.BranchId == branchId && b.Created.HasValue)
+                .Where(b => b.Created.HasValue)
                 .AsEnumerable()
                 .GroupBy(b =>
                 {
@@ -74,10 +105,7 @@ namespace NhaHang.Controllers
                     return new
                     {
                         Hour = hour,
-                        //TimeRange = timeRange,
                         DayOfWeek = day.ToString(),
-                        //SoBanSuDung = usedCount,
-                        //TongBan = totalTables,
                         TiLeSuDung = Math.Round((double)usedCount * 100 / totalTables, 2),
                         SortKey = (int)day
                     };
@@ -87,10 +115,7 @@ namespace NhaHang.Controllers
                 .Select(x => new
                 {
                     x.Hour,
-                    //x.TimeRange,
                     x.DayOfWeek,
-                    //x.SoBanSuDung,
-                    //x.TongBan,
                     x.TiLeSuDung
                 })
                 .ToList();
@@ -99,21 +124,10 @@ namespace NhaHang.Controllers
         }
 
         [HttpGet]
-        [Route("/Statistics/TopFoods")]
-        public IActionResult ThongKeTop10MonAnBanChay(int branchID)
+        [Authorize(Policy = "AdminOnly")]
+        [Route("/Admin/Statistics/TopFoods")]
+        public IActionResult ThongKeTop10MonAnBanChay()
         {
-            var userIdClaim = User.FindFirst("UserId");
-            var roleClaim = User.FindFirst(ClaimTypes.Role);
-            var userId = int.Parse(userIdClaim.Value);
-            var role = roleClaim?.Value;
-
-            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == userId);
-            if (currentUser == null)
-                return Unauthorized(new { message = "Không xác định được người dùng!" });
-
-            if (role != "Quản lý tổng" && currentUser.BranchId != branchID)
-                return Unauthorized(new { message = "Bạn không có quyền xem thống kê của chi nhánh này!" });
-
             DateTime today = DateTime.Now;
             DateTime thirtyDaysAgo = today.AddDays(-30);
 
@@ -130,8 +144,7 @@ namespace NhaHang.Controllers
                 .Include(bi => bi.Bill)
                 .Where(bi => bi.Bill.PaidDate != null
                              && bi.Bill.PaidDate.Value >= thirtyDaysAgo
-                             && bi.Bill.PaidDate.Value <= today
-                             && bi.Bill.BranchId == branchID)
+                             && bi.Bill.PaidDate.Value <= today)
                 .GroupBy(bi => bi.FoodId)
                 .Select(g => new
                 {
@@ -152,7 +165,7 @@ namespace NhaHang.Controllers
                         f.Picture,
                         SoLuong = sales.FirstOrDefault()?.SoLuong ?? 0
                     })
-                .OrderByDescending(x => x.SoLuong) 
+                .OrderByDescending(x => x.SoLuong)
                 .Take(10)
                 .ToList();
 
@@ -160,21 +173,9 @@ namespace NhaHang.Controllers
         }
 
         [HttpGet]
-        [Route("/Statistics/BottomFoods")]
-        public IActionResult ThongKeTop10MonAnItBanNhat(int branchID)
+        [Route("/Admin/Statistics/BottomFoods")]
+        public IActionResult ThongKeTop10MonAnItBanNhat()
         {
-            var userIdClaim = User.FindFirst("UserId");
-            var roleClaim = User.FindFirst(ClaimTypes.Role);
-            var userId = int.Parse(userIdClaim.Value);
-            var role = roleClaim?.Value;
-
-            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == userId);
-            if (currentUser == null)
-                return Unauthorized(new { message = "Không xác định được người dùng!" });
-
-            if (role != "Quản lý tổng" && currentUser.BranchId != branchID)
-                return Unauthorized(new { message = "Bạn không có quyền xem thống kê của chi nhánh này!" });
-
             DateTime today = DateTime.Now;
             DateTime thirtyDaysAgo = today.AddDays(-30);
 
@@ -191,8 +192,7 @@ namespace NhaHang.Controllers
                 .Include(bi => bi.Bill)
                 .Where(bi => bi.Bill.PaidDate != null
                              && bi.Bill.PaidDate.Value >= thirtyDaysAgo
-                             && bi.Bill.PaidDate.Value <= today
-                             && bi.Bill.BranchId == branchID)
+                             && bi.Bill.PaidDate.Value <= today)
                 .GroupBy(bi => bi.FoodId)
                 .Select(g => new
                 {
@@ -219,7 +219,7 @@ namespace NhaHang.Controllers
 
             return Ok(result);
         }
-        public enum TimeRange
+        public enum TimeRange1
         {
             SevenDays = 1,
             OneMonth = 2,
@@ -228,28 +228,17 @@ namespace NhaHang.Controllers
         }
 
         [HttpGet]
-        [Route("/Statistics/FoodRevenue")]
-        public IActionResult ThongKeDoanhThuTheoMonAn(int branchID, TimeRange range)
+        [Authorize(Policy = "AdminOnly")]
+        [Route("/Admin/Statistics/FoodRevenue")]
+        public IActionResult ThongKeDoanhThuTheoMonAn(TimeRange1 range)
         {
-            var userIdClaim = User.FindFirst("UserId");
-            var roleClaim = User.FindFirst(ClaimTypes.Role);
-            var userId = int.Parse(userIdClaim.Value);
-            var role = roleClaim?.Value;
-
-            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == userId);
-            if (currentUser == null)
-                return Unauthorized(new { message = "Không xác định được người dùng!" });
-
-            if (role != "Quản lý tổng" && currentUser.BranchId != branchID)
-                return Unauthorized(new { message = "Bạn không có quyền xem thống kê của chi nhánh này!" });
-
             DateTime today = DateTime.Now;
             DateTime startDate = range switch
             {
-                TimeRange.SevenDays => today.AddDays(-6),
-                TimeRange.OneMonth => today.AddMonths(-1).AddDays(1),
-                TimeRange.TwelveMonths => today.AddMonths(-11),
-                TimeRange.FiveYears => today.AddYears(-4),
+                TimeRange1.SevenDays => today.AddDays(-6),
+                TimeRange1.OneMonth => today.AddMonths(-1).AddDays(1),
+                TimeRange1.TwelveMonths => today.AddMonths(-11),
+                TimeRange1.FiveYears => today.AddYears(-4),
                 _ => today
             };
 
@@ -265,8 +254,7 @@ namespace NhaHang.Controllers
                 .Include(bi => bi.Bill)
                 .Where(bi => bi.Bill.PaidDate != null
                              && bi.Bill.PaidDate.Value >= startDate
-                             && bi.Bill.PaidDate.Value <= today
-                             && bi.Bill.BranchId == branchID)
+                             && bi.Bill.PaidDate.Value <= today)
                 .GroupBy(bi => bi.FoodId)
                 .Select(g => new
                 {
@@ -295,28 +283,17 @@ namespace NhaHang.Controllers
         }
 
         [HttpGet]
-        [Route("/Statistics/FoodCategoryRevenue")]
-        public IActionResult ThongKeDoanhThuTheoDanhMuc(int branchID, TimeRange range)
+        [Authorize(Policy = "AdminOnly")]
+        [Route("/Admin/Statistics/FoodCategoryRevenue")]
+        public IActionResult ThongKeDoanhThuTheoDanhMuc(TimeRange1 range)
         {
-            var userIdClaim = User.FindFirst("UserId");
-            var roleClaim = User.FindFirst(ClaimTypes.Role);
-            var userId = int.Parse(userIdClaim.Value);
-            var role = roleClaim?.Value;
-
-            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == userId);
-            if (currentUser == null)
-                return Unauthorized(new { message = "Không xác định được người dùng!" });
-
-            if (role != "Quản lý tổng" && currentUser.BranchId != branchID)
-                return Unauthorized(new { message = "Bạn không có quyền xem thống kê của chi nhánh này!" });
-
             DateTime today = DateTime.Now;
             DateTime startDate = range switch
             {
-                TimeRange.SevenDays => today.AddDays(-6),
-                TimeRange.OneMonth => today.AddMonths(-1).AddDays(1),
-                TimeRange.TwelveMonths => today.AddMonths(-11),
-                TimeRange.FiveYears => today.AddYears(-4),
+                TimeRange1.SevenDays => today.AddDays(-6),
+                TimeRange1.OneMonth => today.AddMonths(-1).AddDays(1),
+                TimeRange1.TwelveMonths => today.AddMonths(-11),
+                TimeRange1.FiveYears => today.AddYears(-4),
                 _ => today
             };
 
@@ -332,8 +309,7 @@ namespace NhaHang.Controllers
                 .Include(bi => bi.Bill)
                 .Where(bi => bi.Bill.PaidDate != null
                              && bi.Bill.PaidDate.Value >= startDate
-                             && bi.Bill.PaidDate.Value <= today
-                             && bi.Bill.BranchId == branchID)
+                             && bi.Bill.PaidDate.Value <= today)
                 .GroupBy(bi => bi.Food.CategoryId)
                 .Select(g => new
                 {
@@ -362,28 +338,17 @@ namespace NhaHang.Controllers
         }
 
         [HttpGet]
-        [Route("/Statistics/Revenue")]
-        public IActionResult ThongKeDoanhThu(int branchID, TimeRange range)
+        [Authorize(Policy = "AdminOnly")]
+        [Route("/Admin/Statistics/Revenue")]
+        public IActionResult ThongKeDoanhThu(TimeRange1 range)
         {
-            var userIdClaim = User.FindFirst("UserId");
-            var roleClaim = User.FindFirst(ClaimTypes.Role);
-            var userId = int.Parse(userIdClaim.Value);
-            var role = roleClaim?.Value;
-
-            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == userId);
-            if (currentUser == null)
-                return Unauthorized(new { message = "Không xác định được người dùng!" });
-
-            if (role != "Quản lý tổng" && currentUser.BranchId != branchID)
-                return Unauthorized(new { message = "Bạn không có quyền xem thống kê của chi nhánh này!" });
-
             DateTime today = DateTime.Now;
             DateTime startDate = range switch
             {
-                TimeRange.SevenDays => today.AddDays(-6),
-                TimeRange.OneMonth => today.AddMonths(-1).AddDays(1),
-                TimeRange.TwelveMonths => today.AddMonths(-11),
-                TimeRange.FiveYears => today.AddYears(-4),
+                TimeRange1.SevenDays => today.AddDays(-6),
+                TimeRange1.OneMonth => today.AddMonths(-1).AddDays(1),
+                TimeRange1.TwelveMonths => today.AddMonths(-11),
+                TimeRange1.FiveYears => today.AddYears(-4),
                 _ => today
             };
 
@@ -392,24 +357,23 @@ namespace NhaHang.Controllers
                 .Include(bi => bi.Food)
                 .Where(bi => bi.Bill.PaidDate != null
                              && bi.Bill.PaidDate.Value >= startDate
-                             && bi.Bill.PaidDate.Value <= today
-                             && bi.Bill.BranchId == branchID)
+                             && bi.Bill.PaidDate.Value <= today)
                 .AsEnumerable();
 
             List<object> result = range switch
             {
-                TimeRange.SevenDays =>
+                TimeRange1.SevenDays =>
                     Enumerable.Range(0, 7)
                         .Select(i => startDate.AddDays(i))
                         .Select(date => new
                         {
-                            Ngay = date.ToString("dddd"), 
+                            Ngay = date.ToString("dddd"),
                             TongDoanhThu = doanhThu
                                 .Where(bi => bi.Bill.PaidDate.Value.Date == date.Date)
                                 .Sum(x => x.Quantity * x.Food.Price)
                         }).ToList<object>(),
 
-                TimeRange.OneMonth =>
+                TimeRange1.OneMonth =>
                     Enumerable.Range(0, (today - startDate).Days + 1)
                         .Select(i => startDate.AddDays(i))
                         .Select(date => new
@@ -420,7 +384,7 @@ namespace NhaHang.Controllers
                                 .Sum(x => x.Quantity * x.Food.Price)
                         }).ToList<object>(),
 
-                TimeRange.TwelveMonths =>
+                TimeRange1.TwelveMonths =>
                     Enumerable.Range(0, 12)
                         .Select(i => startDate.AddMonths(i))
                         .Distinct()
@@ -434,7 +398,7 @@ namespace NhaHang.Controllers
                                 .Sum(x => x.Quantity * x.Food.Price)
                         }).ToList<object>(),
 
-                TimeRange.FiveYears =>
+                TimeRange1.FiveYears =>
                     Enumerable.Range(0, 5)
                         .Select(i => today.AddYears(-i).Year)
                         .OrderBy(y => y)
@@ -448,49 +412,6 @@ namespace NhaHang.Controllers
 
                 _ => new List<object>()
             };
-
-            return Ok(result);
-        }
-
-        [HttpGet]
-        [Route("/Statistics/RevenueByBranch")]
-        public IActionResult ThongKeTongDoanhThuTheoChiNhanh(TimeRange range)
-        {
-            DateTime today = DateTime.Now;
-            DateTime startDate = range switch
-            {
-                TimeRange.SevenDays => today.AddDays(-6),
-                TimeRange.OneMonth => today.AddMonths(-1).AddDays(1),
-                TimeRange.TwelveMonths => today.AddMonths(-11),
-                TimeRange.FiveYears => today.AddYears(-4),
-                _ => today
-            };
-
-            var allBranches = dbc.Branches.ToList();
-
-            var billItems = dbc.BillItems
-                .Include(bi => bi.Bill)
-                .Include(bi => bi.Food)
-                .Where(bi => bi.Bill.PaidDate != null
-                             && bi.Bill.PaidDate.Value >= startDate
-                             && bi.Bill.PaidDate.Value <= today)
-                .ToList();
-
-            var result = allBranches
-                .Select(branch =>
-                {
-                    var doanhThu = billItems
-                        .Where(bi => bi.Bill.BranchId == branch.BranchId)
-                        .Sum(bi => bi.Quantity * (bi.Food?.Price ?? 0));
-
-                    return new
-                    {
-                        BranchId = branch.BranchId,
-                        ChiNhanh = branch.BranchName,
-                        TongDoanhThu = doanhThu
-                    };
-                })
-                .ToList();
 
             return Ok(result);
         }

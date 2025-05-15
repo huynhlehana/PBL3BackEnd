@@ -8,7 +8,7 @@ namespace NhaHang.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Policy = "AdminOnly")]
+    
     public class MonAnController : ControllerBase
     {
         private readonly quanlynhahang dbc;
@@ -19,6 +19,7 @@ namespace NhaHang.Controllers
         }
 
         [HttpGet]
+        [Authorize(Policy = "Everyone")]
         [Route("/Food/List")]
         public IActionResult GetList()
         {
@@ -65,6 +66,7 @@ namespace NhaHang.Controllers
 
 
         [HttpPost]
+        [Authorize(Policy = "AdminOnly")]
         [Route("/Food/Add")]
         public IActionResult ThemMonAn(string TenMonAn, int MaDanhMuc, decimal Gia, string? urlAnh)
         {
@@ -96,6 +98,7 @@ namespace NhaHang.Controllers
         }
 
         [HttpPut]
+        [Authorize(Policy = "AdminOnly")]
         [Route("/Food/Update")]
         public IActionResult CapNhatMonAn(int ID, string? TenMonAn, int? MaDanhMuc, decimal? Gia, string? urlAnh)
         {
@@ -128,6 +131,7 @@ namespace NhaHang.Controllers
         }
 
         [HttpDelete]
+        [Authorize(Policy = "AdminOnly")]
         [Route("/Food/Delete")]
         public IActionResult XoaMonAn(int ID)
         {

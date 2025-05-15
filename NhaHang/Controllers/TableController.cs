@@ -3,12 +3,13 @@ using Microsoft.AspNetCore.Mvc;
 using NhaHang.ModelFromDB;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace NhaHang.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Policy = "Management")]
+    
     public class TableController : Controller
     {
         private readonly quanlynhahang dbc;
@@ -19,6 +20,7 @@ namespace NhaHang.Controllers
         }
 
         [HttpGet]
+        [Authorize(Policy = "Everyone")]
         [Route("/Table/ByBranch")]
         public IActionResult LayDanhSachBanTheoChiNhanh(int branchID)
         {
@@ -42,14 +44,27 @@ namespace NhaHang.Controllers
         }
 
         [HttpPost]
+        [Authorize(Policy = "Management")]
         [Route("/Table/Add")]
-        public IActionResult ThemBan(int tableNumber, int capacity, int statusID, int branchID)
+        public IActionResult ThemBan(int tableNumber, int capacity, int branchID)
         {
+            var userIdClaim = User.FindFirst("UserId");
+            var roleClaim = User.FindFirst(ClaimTypes.Role);
+            var userId = int.Parse(userIdClaim.Value);
+            var role = roleClaim?.Value;
+
+            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == userId);
+            if (currentUser == null)
+                return Unauthorized(new { message = "Không xác định được người dùng!" });
+
+            if (role != "Quản lý tổng" && currentUser.BranchId != branchID)
+                return Unauthorized(new { message = "Bạn không có quyền thêm bàn cho chi nhánh này!" });
+
             Table dm = new Table()
             {
                 TableNumber = tableNumber,
                 Capacity = capacity,
-                StatusId = statusID,
+                StatusId = 1,
                 BranchId = branchID
             };
             dbc.Tables.Add(dm);
@@ -63,7 +78,6 @@ namespace NhaHang.Controllers
                     t.TableId,
                     t.TableNumber,
                     t.Capacity,
-                    StatusName = t.Status.StatusName,
                     t.BranchId,
                 })
                 .FirstOrDefault();
@@ -71,18 +85,32 @@ namespace NhaHang.Controllers
         }
 
         [HttpPut]
+        [Authorize(Policy = "Management")]
         [Route("/Table/Update")]
-        public IActionResult CapNhatThongTinBan(int ID, int tableNumber, int capacity, int statusID, int branchID)
+        public IActionResult CapNhatThongTinBan(int ID, int tableNumber, int capacity, int branchID)
         {
+            var userIdClaim = User.FindFirst("UserId");
+            var roleClaim = User.FindFirst(ClaimTypes.Role);
+            var userId = int.Parse(userIdClaim.Value);
+            var role = roleClaim?.Value;
+
+            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == userId);
+            if (currentUser == null)
+                return Unauthorized(new { message = "Không xác định được người dùng!" });
+
+            if (role != "Quản lý tổng" && currentUser.BranchId != branchID)
+                return Unauthorized(new { message = "Bạn không có quyền cập nhật bàn của chi nhánh này!" });
+
             var dm = dbc.Tables.Find(ID);
             if (dm == null)
                 return NotFound(new { message = "Bàn không tồn tại!" });
             dm.TableNumber = tableNumber;
             dm.Capacity = capacity;
-            dm.StatusId = statusID;
             dm.BranchId = branchID;
+
             dbc.Tables.Update(dm);
             dbc.SaveChanges();
+
             var ban = dbc.Tables
                 .Include(t => t.Status)
                 .Include(t => t.Branch)
@@ -92,7 +120,6 @@ namespace NhaHang.Controllers
                     t.TableId,
                     t.TableNumber,
                     t.Capacity,
-                    StatusName = t.Status.StatusName,
                     t.BranchId,
                 })
                 .FirstOrDefault();
@@ -100,12 +127,35 @@ namespace NhaHang.Controllers
         }
 
         [HttpDelete]
+        [Authorize(Policy = "Management")]
         [Route("/Table/Delete")]
         public IActionResult XoaBan(int ID)
         {
+            var userIdClaim = User.FindFirst("UserId");
+            var roleClaim = User.FindFirst(ClaimTypes.Role);
+            var userId = int.Parse(userIdClaim.Value);
+            var role = roleClaim?.Value;
+
+            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == userId);
+            if (currentUser == null)
+                return Unauthorized(new { message = "Không xác định được người dùng!" });
+
             var dm = dbc.Tables.Find(ID);
+            if (role != "Quản lý tổng" && currentUser.BranchId != dm.BranchId)
+                return Unauthorized(new { message = "Bạn không có quyền xóa bàn của chi nhánh này!" });
             if (dm == null)
                 return NotFound(new { message = "Bàn không tồn tại!" });
+
+            var bill = dbc.Bills.FirstOrDefault(b => b.TableId == ID && b.Table.StatusId == 3);
+            if (bill != null)
+            {
+                var billDetails = dbc.BillItems.Where(d => d.BillId == bill.BillId).ToList();
+                if (billDetails.Any())
+                    dbc.BillItems.RemoveRange(billDetails);
+
+                dbc.Bills.Remove(bill);
+            }
+
             dbc.Tables.Remove(dm);
             dbc.SaveChanges();
             return Ok(new { message = "Xóa bàn thành công!", data = dm });
