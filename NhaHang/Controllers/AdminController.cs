@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NhaHang.ModelFromDB;
 using Microsoft.EntityFrameworkCore;
+using static NhaHang.Controllers.StatisticsController;
 
 namespace NhaHang.Controllers
 {
@@ -222,7 +223,7 @@ namespace NhaHang.Controllers
         public enum TimeRange1
         {
             SevenDays = 1,
-            OneMonth = 2,
+            TwelveWeek = 2,
             TwelveMonths = 3,
             FiveYears = 4
         }
@@ -236,7 +237,7 @@ namespace NhaHang.Controllers
             DateTime startDate = range switch
             {
                 TimeRange1.SevenDays => today.AddDays(-6),
-                TimeRange1.OneMonth => today.AddMonths(-1).AddDays(1),
+                TimeRange1.TwelveWeek => today.AddDays(-83),
                 TimeRange1.TwelveMonths => today.AddMonths(-11),
                 TimeRange1.FiveYears => today.AddYears(-4),
                 _ => today
@@ -291,7 +292,7 @@ namespace NhaHang.Controllers
             DateTime startDate = range switch
             {
                 TimeRange1.SevenDays => today.AddDays(-6),
-                TimeRange1.OneMonth => today.AddMonths(-1).AddDays(1),
+                TimeRange1.TwelveWeek => today.AddDays(-83),
                 TimeRange1.TwelveMonths => today.AddMonths(-11),
                 TimeRange1.FiveYears => today.AddYears(-4),
                 _ => today
@@ -346,7 +347,7 @@ namespace NhaHang.Controllers
             DateTime startDate = range switch
             {
                 TimeRange1.SevenDays => today.AddDays(-6),
-                TimeRange1.OneMonth => today.AddMonths(-1).AddDays(1),
+                TimeRange1.TwelveWeek => today.AddDays(-83),
                 TimeRange1.TwelveMonths => today.AddMonths(-11),
                 TimeRange1.FiveYears => today.AddYears(-4),
                 _ => today
@@ -373,15 +374,26 @@ namespace NhaHang.Controllers
                                 .Sum(x => x.Quantity * x.Food.Price)
                         }).ToList<object>(),
 
-                TimeRange1.OneMonth =>
-                    Enumerable.Range(0, (today - startDate).Days + 1)
-                        .Select(i => startDate.AddDays(i))
-                        .Select(date => new
+                TimeRange1.TwelveWeek =>
+                    Enumerable.Range(0, 12)
+                        .Select(weekOffset =>
                         {
-                            Ngay = $"{date.Day}/{date.Month}",
-                            TongDoanhThu = doanhThu
-                                .Where(bi => bi.Bill.PaidDate.Value.Date == date.Date)
-                                .Sum(x => x.Quantity * x.Food.Price)
+                            var weekStart = startDate.AddDays(weekOffset * 7);
+                            if (weekStart.DayOfWeek != DayOfWeek.Monday)
+                            {
+                                int offset = ((int)weekStart.DayOfWeek + 6) % 7;
+                                weekStart = weekStart.AddDays(-offset);
+                            }
+                            var weekEnd = weekStart.AddDays(6);
+
+                            return new
+                            {
+                                Ngay = weekEnd.ToString("dd/MM"),
+                                TongDoanhThu = doanhThu
+                                    .Where(bi => bi.Bill.PaidDate.Value.Date >= weekStart.Date
+                                              && bi.Bill.PaidDate.Value.Date <= weekEnd.Date)
+                                    .Sum(x => x.Quantity * x.Food.Price)
+                            };
                         }).ToList<object>(),
 
                 TimeRange1.TwelveMonths =>
