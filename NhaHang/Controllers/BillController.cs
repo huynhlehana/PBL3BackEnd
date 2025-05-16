@@ -237,13 +237,7 @@ namespace NhaHang.Controllers
 
                 using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
                 using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrData, QRCodeGenerator.ECCLevel.Q))
-                //using (QRCode qrCode = new QRCode(qrCodeData))
-                //using (Bitmap qrCodeImage = qrCode.GetGraphic(20))
-                //using (MemoryStream ms = new MemoryStream())
                 {
-                    //qrCodeImage.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-                    //var base64Image = Convert.ToBase64String(ms.ToArray());
-
                     var qrCode = new BitmapByteQRCode(qrCodeData);
                     byte[] qrCodeBytes = qrCode.GetGraphic(20);
 
@@ -285,6 +279,31 @@ namespace NhaHang.Controllers
                     TienThua = paymentMethodId == 1 ? tienKhachGui - bill.TotalPrice : null
                 }
             });
+        }
+        [HttpPut]
+        [Route("/Bill/ConfirmTransfer")]
+        public IActionResult ConfirmBankTransfer(int billId)
+        {
+            var bill = dbc.Bills.FirstOrDefault(b => b.BillId == billId);
+            if (bill == null)
+                return NotFound(new { message = "Không tìm thấy hóa đơn!" });
+
+            if (bill.PaidDate != null)
+                return BadRequest(new { message = "Hóa đơn đã được thanh toán!" });
+
+            bill.PaidDate = DateTime.Now;
+            dbc.Bills.Update(bill);
+
+            var table = dbc.Tables.FirstOrDefault(t => t.TableId == bill.TableId);
+            if (table != null)
+            {
+                table.StatusId = 1;
+                dbc.Tables.Update(table);
+            }
+
+            dbc.SaveChanges();
+
+            return Ok(new { message = "Thanh toán thành công!" });
         }
     }
 }
