@@ -65,6 +65,8 @@ namespace NhaHang.Controllers
             var dm = dbc.Branches.Find(ID);
             if (dm == null)
                 return NotFound(new { message = "Chi nhánh không tồn tại!" });
+            var banTrongChiNhanh = dbc.Tables.Where(t => t.BranchId == ID).ToList();
+            dbc.Tables.RemoveRange(banTrongChiNhanh);
             dbc.Branches.Remove(dm);
             dbc.SaveChanges();
             return Ok(new { message = "Xóa chi nhánh thành công!", data = dm });
