@@ -427,7 +427,7 @@ namespace NhaHang.Controllers
                         .OrderBy(m => m)
                         .Select(date => new
                         {
-                            Thang = $"{date.Month}/{date.Year}",
+                            Ngay = $"{date.Month}/{date.Year}",
                             TongDoanhThu = doanhThu
                                 .Where(bi => bi.Bill.PaidDate.Value.Month == date.Month
                                              && bi.Bill.PaidDate.Value.Year == date.Year)
@@ -440,7 +440,7 @@ namespace NhaHang.Controllers
                         .OrderBy(y => y)
                         .Select(year => new
                         {
-                            Nam = year.ToString(),
+                            Ngay = year.ToString(),
                             TongDoanhThu = doanhThu
                                 .Where(bi => bi.Bill.PaidDate.Value.Year == year)
                                 .Sum(x => x.Quantity * x.Food.Price)
