@@ -4,6 +4,9 @@ using NhaHang.ModelFromDB;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using QRCoder;
+using System.Drawing;
+using System.Drawing.Imaging;
 
 namespace NhaHang.Controllers
 {
@@ -53,8 +56,9 @@ namespace NhaHang.Controllers
                     i.Quantity,
                     i.Description,
                     i.SubTotal,
-                })
-            });
+                }),
+                TotalPrice = existingBill.BillItems.Sum(i => i.SubTotal)
+        });
         }
 
         [HttpPut]
@@ -102,13 +106,12 @@ namespace NhaHang.Controllers
                 };
 
                 dbc.Bills.Add(bill);
-
-                // Cập nhật trạng thái bàn thành "đang sử dụng" (nếu chưa)
-                table.StatusId = 3;
-                dbc.Tables.Update(table);
-
-                dbc.SaveChanges(); // Lưu trước để lấy BillId
             }
+
+            table.StatusId = 3;
+            dbc.Tables.Update(table);
+
+            dbc.SaveChanges();
 
             foreach (var i in foodOrders)
             {
@@ -138,11 +141,11 @@ namespace NhaHang.Controllers
                     dbc.BillItems.Update(existingItem);
                     targetItem = existingItem;
                 }
-
-                dbc.SaveChanges();
             }
 
-                var updatedItems = dbc.BillItems
+            dbc.SaveChanges();
+
+            var updatedItems = dbc.BillItems
                     .Include(i => i.Food)
                     .Where(i => i.BillId == bill.BillId)
                     .Select(i => new
@@ -196,17 +199,17 @@ namespace NhaHang.Controllers
 
             return Ok(new { message = "Xoá danh sách món thành công!" });
         }
-
+        
         [HttpPut]
         [Route("/Bill/Checkout")]
-        public IActionResult ThanhToan(int billId, int paymentMethodId)
+        public IActionResult ThanhToan(int tableId, int paymentMethodId, decimal? tienKhachGui = null)
         {
             var bill = dbc.Bills
                 .Include(b => b.BillItems)
-                .FirstOrDefault(b => b.BillId == billId);
+                .FirstOrDefault(b => b.TableId == tableId && b.PaidDate == null);
 
             if (bill == null)
-                return NotFound(new { message = "Không tìm thấy hóa đơn!" });
+                return NotFound(new { message = "Không tìm thấy hóa đơn đang mở cho bàn này!" });
 
             if (!bill.BillItems.Any())
                 return BadRequest(new { message = "Hóa đơn chưa có món ăn!" });
@@ -214,6 +217,51 @@ namespace NhaHang.Controllers
             bill.TotalPrice = bill.BillItems.Sum(i => i.SubTotal);
             bill.PaidDate = DateTime.Now;
             bill.PaymentMethodId = paymentMethodId;
+
+            if (paymentMethodId == 1)
+            {
+                if (tienKhachGui == null || tienKhachGui < bill.TotalPrice)
+                {
+                    return BadRequest(new { message = "Số tiền khách gửi không đủ!" });
+                }
+            }
+            else if (paymentMethodId == 2)
+            {
+                string noiDungCK = $"Thanh toan hoa don #{bill.BillId} - {bill.TotalPrice} VND";
+
+                string soTaiKhoan = "1234567890";
+                string tenNguoiNhan = "Lê Thành Dương";
+                string nganHang = "ABC Bank";
+
+                string qrData = $"STK:{soTaiKhoan}\nTEN:{tenNguoiNhan}\nNH:{nganHang}\nNOIDUNG:{noiDungCK}\nSOTIEN:{bill.TotalPrice}";
+
+                using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
+                using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrData, QRCodeGenerator.ECCLevel.Q))
+                //using (QRCode qrCode = new QRCode(qrCodeData))
+                //using (Bitmap qrCodeImage = qrCode.GetGraphic(20))
+                //using (MemoryStream ms = new MemoryStream())
+                {
+                    //qrCodeImage.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                    //var base64Image = Convert.ToBase64String(ms.ToArray());
+
+                    var qrCode = new BitmapByteQRCode(qrCodeData);
+                    byte[] qrCodeBytes = qrCode.GetGraphic(20);
+
+                    string base64Image = Convert.ToBase64String(qrCodeBytes);
+
+                    return Ok(new
+                    {
+                        message = "Vui lòng quét mã QR để chuyển khoản!",
+                        data = new
+                        {
+                            bill.BillId,
+                            bill.TotalPrice,
+                            qrBase64 = "data:image/png;base64," + base64Image
+                        }
+                    });
+                }
+            }
+
             dbc.Bills.Update(bill);
 
             var table = dbc.Tables.FirstOrDefault(t => t.TableId == bill.TableId);
@@ -233,7 +281,8 @@ namespace NhaHang.Controllers
                     bill.BillId,
                     bill.TotalPrice,
                     bill.PaidDate,
-                    PhuongThucThanhToan = dbc.PaymentMethods.FirstOrDefault(p => p.PaymentMethodId == paymentMethodId)?.PaymentMethodName
+                    PhuongThucThanhToan = dbc.PaymentMethods.FirstOrDefault(p => p.PaymentMethodId == paymentMethodId)?.PaymentMethodName,
+                    TienThua = paymentMethodId == 1 ? tienKhachGui - bill.TotalPrice : null
                 }
             });
         }
