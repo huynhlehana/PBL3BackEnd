@@ -199,7 +199,43 @@ namespace NhaHang.Controllers
 
             return Ok(new { message = "Xoá danh sách món thành công!" });
         }
-        
+
+        [HttpGet]
+        [Route("/Bill/SendQR")]
+        public IActionResult SendQR(int tableId)
+        {
+            var bill = dbc.Bills
+                .Include(b => b.BillItems)
+                .FirstOrDefault(b => b.TableId == tableId && b.PaidDate == null);
+
+            if (bill == null)
+                return NotFound(new { message = "Không tìm thấy hóa đơn đang mở cho bàn này!" });
+
+            if (!bill.BillItems.Any())
+                return BadRequest(new { message = "Hóa đơn chưa có món ăn!" });
+
+            bill.TotalPrice = bill.BillItems.Sum(i => i.SubTotal);
+
+            string soTaiKhoan = "123456789";
+            string maNganHang = "vietinbank";
+            string noiDungCK = $"Thanh toan hoa don #{bill.BillId}";
+            decimal soTien = bill.TotalPrice;
+
+            string qrUrl = $"https://img.vietqr.io/image/{maNganHang}-{soTaiKhoan}-print.png?amount={soTien}&addInfo={Uri.EscapeDataString(noiDungCK)}";
+
+            return Ok(new
+            {
+                message = "Vui lòng quét mã QR để chuyển khoản!",
+                data = new
+                {
+                    bill.BillId,
+                    bill.TotalPrice,
+                    qrImageUrl = qrUrl,
+                    noiDungChuyenKhoan = noiDungCK
+                }
+            });
+        }
+
         [HttpPut]
         [Route("/Bill/Checkout")]
         public IActionResult ThanhToan(int tableId, int paymentMethodId, decimal? tienKhachGui = null)
@@ -227,33 +263,6 @@ namespace NhaHang.Controllers
             }
             else if (paymentMethodId == 2)
             {
-                string noiDungCK = $"Thanh toan hoa don #{bill.BillId} - {bill.TotalPrice} VND";
-
-                string soTaiKhoan = "1234567890";
-                string tenNguoiNhan = "Lê Thành Dương";
-                string nganHang = "ABC Bank";
-
-                string qrData = $"STK:{soTaiKhoan}\nTEN:{tenNguoiNhan}\nNH:{nganHang}\nNOIDUNG:{noiDungCK}\nSOTIEN:{bill.TotalPrice}";
-
-                using (QRCodeGenerator qrGenerator = new QRCodeGenerator())
-                using (QRCodeData qrCodeData = qrGenerator.CreateQrCode(qrData, QRCodeGenerator.ECCLevel.Q))
-                {
-                    var qrCode = new BitmapByteQRCode(qrCodeData);
-                    byte[] qrCodeBytes = qrCode.GetGraphic(20);
-
-                    string base64Image = Convert.ToBase64String(qrCodeBytes);
-
-                    return Ok(new
-                    {
-                        message = "Vui lòng quét mã QR để chuyển khoản!",
-                        data = new
-                        {
-                            bill.BillId,
-                            bill.TotalPrice,
-                            qrBase64 = "data:image/png;base64," + base64Image
-                        }
-                    });
-                }
             }
 
             dbc.Bills.Update(bill);
@@ -279,31 +288,6 @@ namespace NhaHang.Controllers
                     TienThua = paymentMethodId == 1 ? tienKhachGui - bill.TotalPrice : null
                 }
             });
-        }
-        [HttpPut]
-        [Route("/Bill/ConfirmTransfer")]
-        public IActionResult ConfirmBankTransfer(int billId)
-        {
-            var bill = dbc.Bills.FirstOrDefault(b => b.BillId == billId);
-            if (bill == null)
-                return NotFound(new { message = "Không tìm thấy hóa đơn!" });
-
-            if (bill.PaidDate != null)
-                return BadRequest(new { message = "Hóa đơn đã được thanh toán!" });
-
-            bill.PaidDate = DateTime.Now;
-            dbc.Bills.Update(bill);
-
-            var table = dbc.Tables.FirstOrDefault(t => t.TableId == bill.TableId);
-            if (table != null)
-            {
-                table.StatusId = 1;
-                dbc.Tables.Update(table);
-            }
-
-            dbc.SaveChanges();
-
-            return Ok(new { message = "Thanh toán thành công!" });
         }
     }
 }
