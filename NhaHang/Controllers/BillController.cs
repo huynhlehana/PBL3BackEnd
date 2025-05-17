@@ -218,7 +218,7 @@ namespace NhaHang.Controllers
 
             string soTaiKhoan = "123456789";
             string maNganHang = "vietinbank";
-            string noiDungCK = $"Thanh toan hoa don #{bill.BillId}";
+            string noiDungCK = $"Thanh toán hóa đơn bàn số #{bill.TableId}";
             decimal soTien = bill.TotalPrice;
 
             string qrUrl = $"https://img.vietqr.io/image/{maNganHang}-{soTaiKhoan}-print.png?amount={soTien}&addInfo={Uri.EscapeDataString(noiDungCK)}";
