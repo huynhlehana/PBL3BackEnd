@@ -216,7 +216,7 @@ namespace NhaHang.Controllers
 
             bill.TotalPrice = bill.BillItems.Sum(i => i.SubTotal);
 
-            string soTaiKhoan = "123456789";
+            string soTaiKhoan = "105880030539";
             string maNganHang = "vietinbank";
             string noiDungCK = $"Thanh toán hóa đơn bàn số #{bill.TableId}";
             decimal soTien = bill.TotalPrice;
