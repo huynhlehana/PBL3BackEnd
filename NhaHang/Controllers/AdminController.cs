@@ -68,6 +68,108 @@ namespace NhaHang.Controllers
 
         [HttpGet]
         [Authorize(Policy = "AdminOnly")]
+        [Route("Admin/Staff")]
+        public IActionResult LayDanhSachNhanVien()
+        {
+            var userIdClaim = User.FindFirst("UserId");
+            var roleClaim = User.FindFirst(ClaimTypes.Role);
+            var userId = int.Parse(userIdClaim.Value);
+            var role = roleClaim?.Value;
+
+            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == userId);
+            if (currentUser == null)
+                return Unauthorized(new { message = "Không xác định được người dùng!" });
+
+            var dsUser = dbc.Users
+                .Where(t => t.UserId != userId && t.Role.RoleId == 2 || t.Role.RoleId == 3)
+                .Include(t => t.Role)
+                .Include(t => t.Gender)
+                .Include(t => t.Branch)
+                .Select(t => new
+                {
+                    t.UserId,
+                    fullName = t.FirstName + " " + t.LastName,
+                    t.PhoneNumber,
+                    birthDay = t.BirthDay.ToString("yyyy-MM-dd"),
+                    gender = t.Gender.GenderName,
+                    role = t.Role.RoleName,
+                    t.Picture,
+                    CreateAt = t.CreateAt.Value.ToString("yyyy-MM-dd hh:mm:ss tt"),
+                    t.BranchId,
+                }).ToList();
+
+            if (dsUser == null || dsUser.Count == 0)
+                return NotFound(new { message = "Không tìm thấy nhân viên nào!" });
+
+            return Ok(new { data = dsUser });
+        }
+
+        [HttpGet]
+        [Authorize(Policy = "Management")]
+        [Route("Admin/StaffByBranch")]
+        public IActionResult LayDanhSachUserTheoChiNhanh(int branchID)
+        {
+            var userIdClaim = User.FindFirst("UserId");
+            var roleClaim = User.FindFirst(ClaimTypes.Role);
+            var userId = int.Parse(userIdClaim.Value);
+            var role = roleClaim?.Value;
+
+            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == userId);
+            if (currentUser == null)
+                return Unauthorized(new { message = "Không xác định được người dùng!" });
+
+            if (role != "Quản lý tổng" && currentUser.BranchId != branchID)
+                return Unauthorized(new { message = "Bạn không có quyền truy cập danh sách user của chi nhánh này!" });
+
+            var dsUser = dbc.Users
+                .Where(t => t.BranchId == branchID && t.UserId != userId && t.Role.RoleId == 3)
+                .Include(t => t.Role)
+                .Include(t => t.Gender)
+                .Include(t => t.Branch)
+                .Select(t => new
+                {
+                    t.UserId,
+                    fullName = t.FirstName + " " + t.LastName,
+                    t.PhoneNumber,
+                    birthDay = t.BirthDay.ToString("yyyy-MM-dd"),
+                    gender = t.Gender.GenderName,
+                    role = t.Role.RoleName,
+                    t.Picture,
+                    CreateAt = t.CreateAt.Value.ToString("yyyy-MM-dd hh:mm:ss tt"),
+                    t.BranchId,
+                }).ToList();
+
+            if (dsUser == null || dsUser.Count == 0)
+                return NotFound(new { message = "Không tìm thấy nhân viên nào thuộc chi nhánh này!" });
+
+            return Ok(new { data = dsUser });
+        }
+
+        [HttpGet]
+        [Authorize(Policy = "AdminOnly")]
+        [Route("Admin/Table")]
+        public IActionResult LayDanhSachBan()
+        {
+            var dsBan = dbc.Tables
+                .Include(t => t.Status)
+                .Include(t => t.Branch)
+                .Select(t => new
+                {
+                    t.TableId,
+                    t.TableNumber,
+                    t.Capacity,
+                    StatusName = t.Status.StatusName,
+                    t.BranchId,
+                }).ToList();
+
+            if (dsBan == null || dsBan.Count == 0)
+                return NotFound(new { message = "Không tìm thấy bàn nào thuộc nhà hàng này!" });
+
+            return Ok(new { data = dsBan });
+        }
+
+        [HttpGet]
+        [Authorize(Policy = "AdminOnly")]
         [Route("/Admin/Statistics/TableUtilizationRate")]
         public IActionResult ThongKeTiLeSuDungBan()
         {
