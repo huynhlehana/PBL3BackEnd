@@ -31,6 +31,8 @@
 
   <ItemGroup>
     <Folder Include="Controllers\NewFolder\" />
+    <Folder Include="wwwroot\images\branches\" />
+    <Folder Include="wwwroot\images\users\" />
   </ItemGroup>
 
 </Project>

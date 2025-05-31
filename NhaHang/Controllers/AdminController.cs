@@ -193,7 +193,7 @@ namespace NhaHang.Controllers
 
         [HttpGet]
         [Authorize(Policy = "AdminOnly")]
-        [Route("Admin/Staff")]
+        [Route("/Admin/Staff")]
         public IActionResult LayDanhSachNhanVien()
         {
             var userIdClaim = User.FindFirst("UserId");
@@ -231,7 +231,7 @@ namespace NhaHang.Controllers
 
         [HttpGet]
         [Authorize(Policy = "Management")]
-        [Route("Admin/StaffByBranch")]
+        [Route("/Admin/StaffByBranch")]
         public IActionResult LayDanhSachNhanVienTheoChiNhanh(int branchID)
         {
             var userIdClaim = User.FindFirst("UserId");
@@ -272,7 +272,7 @@ namespace NhaHang.Controllers
 
         [HttpGet]
         [Authorize(Policy = "AdminOnly")]
-        [Route("Admin/StaffByID")]
+        [Route("/Admin/StaffByID")]
         public IActionResult LayChiTietNhanVien(int id)
         {
             var user = dbc.Users
@@ -308,7 +308,7 @@ namespace NhaHang.Controllers
 
         [HttpGet]
         [Authorize(Policy = "AdminOnly")]
-        [Route("Admin/Table")]
+        [Route("/Admin/Table")]
         public IActionResult LayDanhSachBan()
         {
             var dsBan = dbc.Tables
