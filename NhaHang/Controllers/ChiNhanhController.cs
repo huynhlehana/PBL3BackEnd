@@ -65,14 +65,20 @@ namespace NhaHang.Controllers
         [HttpPut]
         [Authorize(Policy = "AdminOnly")]
         [Route("/Branch/Update")]
-        public IActionResult CapNhatThongTinChiNhanh(int ID, string TenChiNhanh, string DiaChi, string phone, IFormFile? AnhUpload)
+        public IActionResult CapNhatThongTinChiNhanh(int ID, string? TenChiNhanh, string? DiaChi, string? phone, IFormFile? AnhUpload)
         {
             var dm = dbc.Branches.Find(ID);
             if (dm == null)
                 return NotFound(new { message = "Chi nhánh không tồn tại!" });
-            dm.BranchName = TenChiNhanh;
-            dm.BranchAddr = DiaChi;
-            dm.NumberPhone = phone;
+
+            if (!string.IsNullOrWhiteSpace(TenChiNhanh))
+                dm.BranchName = TenChiNhanh;
+
+            if (!string.IsNullOrWhiteSpace(DiaChi))
+                dm.BranchAddr = DiaChi;
+
+            if (!string.IsNullOrWhiteSpace(phone))
+                dm.NumberPhone = phone;
 
             if (AnhUpload != null && AnhUpload.Length > 0)
             {
