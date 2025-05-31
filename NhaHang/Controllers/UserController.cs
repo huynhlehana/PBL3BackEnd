@@ -52,7 +52,7 @@ namespace NhaHang.Controllers
                     t.UserId,
                     fullName = t.FirstName + " " + t.LastName,
                     t.PhoneNumber,
-                    birthDay = t.BirthDay.ToString("yyyy-MM-dd"),
+                    birthday = t.BirthDay.ToString("yyyy-MM-dd"),
                     gender = t.Gender.GenderName,
                     role = t.Role.RoleName,
                     t.Picture,
