@@ -21,7 +21,7 @@ namespace NhaHang.Controllers
         [HttpPost]
         [Authorize(Policy = "Management")]
         [Route("/Admin/Users/Create")]
-        public IActionResult TaoTaiKhoan(string username, string password, string fistname, string lastname, string phone, DateOnly birth, int genderId, int roleId, int branchId)
+        public IActionResult TaoTaiKhoan(string username, string password, string fistname, string lastname, string phone, DateOnly birth, int genderId, int roleId, IFormFile? AnhUpload, int branchId)
         {
             var currentUserId = int.Parse(User.FindFirst("UserId").Value);
             var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == currentUserId);
@@ -30,6 +30,25 @@ namespace NhaHang.Controllers
 
             if (dbc.Users.Any(u => u.UserName == username || u.PhoneNumber == phone))
                 return Conflict(new { message = "Tên đăng nhập hoặc số điện thoại đã tồn tại!" });
+
+            string? imagePath = null;
+
+            if (AnhUpload != null && AnhUpload.Length > 0)
+            {
+                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "users");
+                if (!Directory.Exists(folderPath))
+                    Directory.CreateDirectory(folderPath);
+
+                var fileName = Guid.NewGuid().ToString() + Path.GetExtension(AnhUpload.FileName);
+                var fullPath = Path.Combine(folderPath, fileName);
+
+                using (var stream = new FileStream(fullPath, FileMode.Create))
+                {
+                    AnhUpload.CopyTo(stream);
+                }
+
+                imagePath = Path.Combine("images", "users", fileName).Replace("\\", "/");
+            }
 
             var newUser = new User
             {
@@ -41,8 +60,9 @@ namespace NhaHang.Controllers
                 BirthDay = birth,
                 GenderId = genderId,
                 RoleId = roleId,
-                BranchId = currentUser.RoleId == 2 ? currentUser.BranchId : branchId,
-                CreateAt = DateTime.Now
+                Picture = imagePath,
+                CreateAt = DateTime.Now,
+                BranchId = currentUser.RoleId == 2 ? currentUser.BranchId : branchId
             };
 
             if (currentUser.RoleId == 1)
@@ -64,6 +84,111 @@ namespace NhaHang.Controllers
             dbc.SaveChanges();
 
             return Ok(new { message = "Tạo tài khoản thành công!", data = newUser });
+        }
+
+        [HttpPut]
+        [Authorize(Policy = "Management")]
+        [Route("/Admin/Users/Update")]
+        public IActionResult CapNhatTaiKhoan(int id, string? username, string? password, string? firstname, string? lastname, string? phone, DateOnly? birth, int? genderId, int? roleId, IFormFile? AnhUpload, int? branchId)
+        {
+            var user = dbc.Users.Find(id);
+            if (user == null)
+                return NotFound(new { message = "Tài khoản không tồn tại!" });
+
+            var currentUserId = int.Parse(User.FindFirst("UserId").Value);
+            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == currentUserId);
+            if (currentUser == null)
+                return Unauthorized(new { message = "Không xác định được người dùng!" });
+
+            if (!string.IsNullOrEmpty(username) && dbc.Users.Any(u => u.UserName == username && u.UserId != id))
+                return Conflict(new { message = "Tên đăng nhập đã tồn tại!" });
+
+            if (!string.IsNullOrEmpty(phone) && dbc.Users.Any(u => u.PhoneNumber == phone && u.UserId != id))
+                return Conflict(new { message = "Số điện thoại đã tồn tại!" });
+
+            if (AnhUpload != null && AnhUpload.Length > 0)
+            {
+                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "users");
+                if (!Directory.Exists(folderPath))
+                    Directory.CreateDirectory(folderPath);
+
+                var fileName = Guid.NewGuid().ToString() + Path.GetExtension(AnhUpload.FileName);
+                var fullPath = Path.Combine(folderPath, fileName);
+
+                using (var stream = new FileStream(fullPath, FileMode.Create))
+                {
+                    AnhUpload.CopyTo(stream);
+                }
+
+                user.Picture = Path.Combine("images", "users", fileName).Replace("\\", "/");
+            }
+
+            user.UserName = username ?? user.UserName;
+            user.Password = password ?? user.Password;
+            user.FirstName = firstname ?? user.FirstName;
+            user.LastName = lastname ?? user.LastName;
+            user.PhoneNumber = phone ?? user.PhoneNumber;
+            user.BirthDay = birth ?? user.BirthDay;
+            user.GenderId = genderId ?? user.GenderId;
+            
+            if (currentUser.RoleId == 1)
+            {
+                if (roleId != null && (roleId != 2 && roleId != 3))
+                    return BadRequest(new { message = "Chỉ được phân quyền quản lý hoặc nhân viên!" });
+
+                if (branchId != null)
+                    user.BranchId = branchId.Value;
+
+                if (roleId != null)
+                    user.RoleId = roleId.Value;
+            }
+            else if (currentUser.RoleId == 2)
+            {
+                if (roleId != null && roleId != 3)
+                    return Unauthorized(new { message = "Bạn chỉ được cập nhật vai trò nhân viên!" });
+
+                user.BranchId = currentUser.BranchId;
+                user.RoleId = 3;
+            }
+            else
+            {
+                return Unauthorized(new { message = "Bạn không có quyền cập nhật tài khoản!" });
+            }
+
+            dbc.Users.Update(user);
+            dbc.SaveChanges();
+
+            return Ok(new { message = "Cập nhật tài khoản thành công!", data = user });
+        }
+
+        [HttpDelete]
+        [Authorize(Policy = "Management")]
+        [Route("/Admin/Users/Delete")]
+        public IActionResult XoaTaiKhoan(int id)
+        {
+            var user = dbc.Users.Find(id);
+            if (user == null)
+                return NotFound(new { message = "Tài khoản không tồn tại!" });
+
+            var currentUserId = int.Parse(User.FindFirst("UserId").Value);
+            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == currentUserId);
+            if (currentUser == null)
+                return Unauthorized(new { message = "Không xác định được người dùng!" });
+
+            if (currentUser.RoleId == 2)
+            {
+                if (user.RoleId != 3 || user.BranchId != currentUser.BranchId)
+                    return Unauthorized(new { message = "Bạn chỉ được xoá nhân viên thuộc chi nhánh của bạn!" });
+            }
+            else if (currentUser.RoleId != 1)
+            {
+                return Unauthorized(new { message = "Bạn không có quyền xoá tài khoản!" });
+            }
+
+            dbc.Users.Remove(user);
+            dbc.SaveChanges();
+
+            return Ok(new { message = "Xoá tài khoản thành công!" });
         }
 
         [HttpGet]
@@ -107,7 +232,7 @@ namespace NhaHang.Controllers
         [HttpGet]
         [Authorize(Policy = "Management")]
         [Route("Admin/StaffByBranch")]
-        public IActionResult LayDanhSachUserTheoChiNhanh(int branchID)
+        public IActionResult LayDanhSachNhanVienTheoChiNhanh(int branchID)
         {
             var userIdClaim = User.FindFirst("UserId");
             var roleClaim = User.FindFirst(ClaimTypes.Role);
@@ -143,6 +268,42 @@ namespace NhaHang.Controllers
                 return NotFound(new { message = "Không tìm thấy nhân viên nào thuộc chi nhánh này!" });
 
             return Ok(new { data = dsUser });
+        }
+
+        [HttpGet]
+        [Authorize(Policy = "AdminOnly")]
+        [Route("Admin/StaffByID")]
+        public IActionResult LayChiTietNhanVien(int id)
+        {
+            var user = dbc.Users
+                .Include(u => u.Role)
+                .Include(u => u.Gender)
+                .Include(u => u.Branch)
+                .FirstOrDefault(u => u.UserId == id);
+
+            if (user == null)
+                return NotFound(new { message = "Không tìm thấy nhân viên!" });
+
+            var data = new
+            {
+                user.UserId,
+                user.UserName,
+                user.FirstName,
+                user.LastName,
+                fullName = user.FirstName + " " + user.LastName,
+                user.PhoneNumber,
+                birthDay = user.BirthDay.ToString("yyyy-MM-dd"),
+                gender = user.Gender?.GenderName,
+                genderId = user.GenderId,
+                role = user.Role?.RoleName,
+                roleId = user.RoleId,
+                user.Picture,
+                CreateAt = user.CreateAt?.ToString("yyyy-MM-dd hh:mm:ss tt"),
+                user.BranchId,
+                branch = user.Branch?.BranchName
+            };
+
+            return Ok(new { data });
         }
 
         [HttpGet]

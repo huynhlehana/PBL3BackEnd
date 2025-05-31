@@ -28,13 +28,35 @@ namespace NhaHang.Controllers
         [HttpPost]
         [Authorize(Policy = "AdminOnly")]
         [Route("/Branch/Add")]
-        public IActionResult ThemChiNhanh(string TenChiNhanh, string DiaChi, string phone, string? image)
+        public IActionResult ThemChiNhanh(string TenChiNhanh, string DiaChi, string phone, IFormFile? AnhUpload)
         {
-            Branch dm = new Branch();
-            dm.BranchName = TenChiNhanh;
-            dm.BranchAddr = DiaChi;
-            dm.NumberPhone = phone;
-            dm.Image = image;
+            string? imagePath = null;
+
+            if (AnhUpload != null && AnhUpload.Length > 0)
+            {
+                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "branches");
+                if (!Directory.Exists(folderPath))
+                    Directory.CreateDirectory(folderPath);
+
+                var fileName = Guid.NewGuid().ToString() + Path.GetExtension(AnhUpload.FileName);
+                var fullPath = Path.Combine(folderPath, fileName);
+
+                using (var stream = new FileStream(fullPath, FileMode.Create))
+                {
+                    AnhUpload.CopyTo(stream);
+                }
+
+                imagePath = Path.Combine("images", "branches", fileName).Replace("\\", "/");
+            }
+
+            Branch dm = new Branch()
+            {
+                BranchName = TenChiNhanh,
+                BranchAddr = DiaChi,
+                NumberPhone = phone,
+                Image = imagePath,
+            };
+            
             dbc.Branches.Add(dm);
             dbc.SaveChanges();
             return Ok(new { message = "Thêm chi nhánh thành công!", data = dm });
@@ -43,7 +65,7 @@ namespace NhaHang.Controllers
         [HttpPut]
         [Authorize(Policy = "AdminOnly")]
         [Route("/Branch/Update")]
-        public IActionResult CapNhatThongTinChiNhanh(int ID, string TenChiNhanh, string DiaChi, string phone, string? image)
+        public IActionResult CapNhatThongTinChiNhanh(int ID, string TenChiNhanh, string DiaChi, string phone, IFormFile? AnhUpload)
         {
             var dm = dbc.Branches.Find(ID);
             if (dm == null)
@@ -51,7 +73,24 @@ namespace NhaHang.Controllers
             dm.BranchName = TenChiNhanh;
             dm.BranchAddr = DiaChi;
             dm.NumberPhone = phone;
-            dm.Image = image;
+
+            if (AnhUpload != null && AnhUpload.Length > 0)
+            {
+                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "branches");
+                if (!Directory.Exists(folderPath))
+                    Directory.CreateDirectory(folderPath);
+
+                var fileName = Guid.NewGuid().ToString() + Path.GetExtension(AnhUpload.FileName);
+                var fullPath = Path.Combine(folderPath, fileName);
+
+                using (var stream = new FileStream(fullPath, FileMode.Create))
+                {
+                    AnhUpload.CopyTo(stream);
+                }
+
+                dm.Image = Path.Combine("images", "branches", fileName).Replace("\\", "/");
+            }
+
             dbc.Branches.Update(dm);
             dbc.SaveChanges();
             return Ok(new { message = "Cập nhật chi nhánh thành công!", data = dm });
