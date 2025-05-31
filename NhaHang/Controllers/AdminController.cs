@@ -271,10 +271,23 @@ namespace NhaHang.Controllers
         }
 
         [HttpGet]
-        [Authorize(Policy = "AdminOnly")]
+        [Authorize(Policy = "Management")]
         [Route("/Admin/StaffByID")]
         public IActionResult LayChiTietNhanVien(int id)
         {
+            var userIdClaim = User.FindFirst("UserId");
+            var roleClaim = User.FindFirst(ClaimTypes.Role);
+
+            if (userIdClaim == null || roleClaim == null)
+                return Unauthorized(new { message = "Thông tin xác thực không hợp lệ!" });
+
+            int currentUserId = int.Parse(userIdClaim.Value);
+            string currentUserRole = roleClaim.Value;
+
+            var currentUser = dbc.Users.FirstOrDefault(u => u.UserId == currentUserId);
+            if (currentUser == null)
+                return Unauthorized(new { message = "Không xác định được người dùng!" });
+
             var user = dbc.Users
                 .Include(u => u.Role)
                 .Include(u => u.Gender)
@@ -284,10 +297,16 @@ namespace NhaHang.Controllers
             if (user == null)
                 return NotFound(new { message = "Không tìm thấy nhân viên!" });
 
+            if (currentUserRole != "Quản lý tổng" && currentUser.BranchId != user.BranchId)
+            {
+                return Unauthorized(new { message = "Bạn không có quyền truy cập thông tin nhân viên này!" });
+            }
+
             var data = new
             {
                 user.UserId,
                 user.UserName,
+                user.Password,
                 user.FirstName,
                 user.LastName,
                 fullName = user.FirstName + " " + user.LastName,
