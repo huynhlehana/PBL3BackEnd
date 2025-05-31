@@ -14,7 +14,7 @@ public partial class Food
     public int FoodId { get; set; }
 
     [Column("foodName")]
-    [StringLength(30)]
+    [StringLength(35)]
     public string FoodName { get; set; } = null!;
 
     [Column("categoryID")]

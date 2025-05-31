@@ -64,12 +64,30 @@ namespace NhaHang.Controllers
             return Ok(new { message = "Kết quả tìm kiếm", data = ketQua });
         }
 
-
         [HttpPost]
         [Authorize(Policy = "AdminOnly")]
         [Route("/Food/Add")]
-        public IActionResult ThemMonAn(string TenMonAn, int MaDanhMuc, decimal Gia, string? urlAnh)
+        public IActionResult ThemMonAn(string TenMonAn, int MaDanhMuc, decimal Gia, IFormFile? AnhUpload)
         {
+            string? urlAnh = null;
+
+            if (AnhUpload != null && AnhUpload.Length > 0)
+            {
+                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "foods");
+                if (!Directory.Exists(folderPath))
+                    Directory.CreateDirectory(folderPath);
+
+                var fileName = Guid.NewGuid().ToString() + Path.GetExtension(AnhUpload.FileName);
+                var fullPath = Path.Combine(folderPath, fileName);
+
+                using (var stream = new FileStream(fullPath, FileMode.Create))
+                {
+                    AnhUpload.CopyTo(stream);
+                }
+
+                urlAnh = Path.Combine("images", "foods", fileName).Replace("\\", "/");
+            }
+
             Food dm = new Food()
             {
                 FoodName = TenMonAn,
@@ -91,16 +109,19 @@ namespace NhaHang.Controllers
                     f.CategoryId,
                     CategoryName = f.Category.CategoryName,
                     f.Price,
-                    f.Picture,
+                    Picture = string.IsNullOrEmpty(f.Picture)
+                        ? null
+                        : $"{Request.Scheme}://{Request.Host}/{f.Picture}"
                 })
                 .FirstOrDefault();
+
             return Ok(new { message = "Thêm món ăn thành công!", data = ma });
         }
 
         [HttpPut]
         [Authorize(Policy = "AdminOnly")]
         [Route("/Food/Update")]
-        public IActionResult CapNhatMonAn(int ID, string? TenMonAn, int? MaDanhMuc, decimal? Gia, string? urlAnh)
+        public IActionResult CapNhatMonAn(int ID, string? TenMonAn, int? MaDanhMuc, decimal? Gia, IFormFile? AnhUpload)
         {
             var ma = dbc.Foods.Find(ID);
             if (ma == null)
@@ -109,7 +130,23 @@ namespace NhaHang.Controllers
             ma.FoodName = TenMonAn ?? ma.FoodName;
             ma.CategoryId = MaDanhMuc ?? ma.CategoryId;
             ma.Price = Gia ?? ma.Price;
-            ma.Picture = urlAnh ?? ma.Picture;
+
+            if (AnhUpload != null && AnhUpload.Length > 0)
+            {
+                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "foods");
+                if (!Directory.Exists(folderPath))
+                    Directory.CreateDirectory(folderPath);
+
+                var fileName = Guid.NewGuid().ToString() + Path.GetExtension(AnhUpload.FileName);
+                var fullPath = Path.Combine(folderPath, fileName);
+
+                using (var stream = new FileStream(fullPath, FileMode.Create))
+                {
+                    AnhUpload.CopyTo(stream);
+                }
+
+                ma.Picture = Path.Combine("images", "foods", fileName).Replace("\\", "/");
+            }
 
             dbc.Foods.Update(ma);
             dbc.SaveChanges();
@@ -124,9 +161,12 @@ namespace NhaHang.Controllers
                     f.CategoryId,
                     CategoryName = f.Category.CategoryName,
                     f.Price,
-                    f.Picture,
+                    Picture = string.IsNullOrEmpty(f.Picture)
+                        ? null
+                        : $"{Request.Scheme}://{Request.Host}/{f.Picture}"
                 })
                 .FirstOrDefault();
+
             return Ok(new { message = "Cập nhật món ăn thành công!", data = mon });
         }
 
