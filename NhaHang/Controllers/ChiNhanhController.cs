@@ -107,14 +107,16 @@ namespace NhaHang.Controllers
         [Route("/Branch/Delete")]
         public IActionResult XoaChiNhanh(int ID)
         {
-            var dm = dbc.Branches.Find(ID);
-            if (dm == null)
+            var cn = dbc.Branches.Find(ID);
+            if (cn == null)
                 return NotFound(new { message = "Chi nhánh không tồn tại!" });
             var banTrongChiNhanh = dbc.Tables.Where(t => t.BranchId == ID).ToList();
             dbc.Tables.RemoveRange(banTrongChiNhanh);
-            dbc.Branches.Remove(dm);
+            var nhanVienTrongChiNhanh = dbc.Users.Where(u => u.BranchId == ID).ToList();
+            dbc.Users.RemoveRange(nhanVienTrongChiNhanh);
+            dbc.Branches.Remove(cn);
             dbc.SaveChanges();
-            return Ok(new { message = "Xóa chi nhánh thành công!", data = dm });
+            return Ok(new { message = "Xóa chi nhánh thành công!", data = cn });
         }
     }
 }

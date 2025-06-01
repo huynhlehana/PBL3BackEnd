@@ -141,10 +141,15 @@ namespace NhaHang.Controllers
                 return Unauthorized(new { message = "Không xác định được người dùng!" });
 
             var dm = dbc.Tables.Find(ID);
+            
             if (role != "Quản lý tổng" && currentUser.BranchId != dm.BranchId)
                 return Unauthorized(new { message = "Bạn không có quyền xóa bàn của chi nhánh này!" });
+            
             if (dm == null)
                 return NotFound(new { message = "Bàn không tồn tại!" });
+
+            if (dm.TableId != 1)
+                return BadRequest(new { message = "Chỉ được phép xóa bàn đang trống" });
 
             var bill = dbc.Bills.FirstOrDefault(b => b.TableId == ID && b.Table.StatusId == 3);
             if (bill != null)
