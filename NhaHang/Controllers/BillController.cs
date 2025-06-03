@@ -7,6 +7,9 @@ using System.Security.Claims;
 using QRCoder;
 using System.Drawing;
 using System.Drawing.Imaging;
+using Spire.Doc;
+using System.Globalization;
+using System.Text;
 
 namespace NhaHang.Controllers
 {
@@ -58,7 +61,7 @@ namespace NhaHang.Controllers
                     i.SubTotal,
                 }),
                 TotalPrice = existingBill.BillItems.Sum(i => i.SubTotal)
-        });
+            });
         }
 
         [HttpPut]
@@ -242,7 +245,9 @@ namespace NhaHang.Controllers
         {
             var bill = dbc.Bills
                 .Include(b => b.BillItems)
+                .ThenInclude(bi => bi.Food)
                 .FirstOrDefault(b => b.TableId == tableId && b.PaidDate == null);
+
 
             if (bill == null)
                 return NotFound(new { message = "Không tìm thấy hóa đơn đang mở cho bàn này!" });
@@ -276,18 +281,98 @@ namespace NhaHang.Controllers
 
             dbc.SaveChanges();
 
-            return Ok(new
+            var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "templates", "invoice_template.docx");
+            if (!System.IO.File.Exists(templatePath))
             {
-                message = "Thanh toán thành công!",
-                data = new
-                {
-                    bill.BillId,
-                    bill.TotalPrice,
-                    bill.PaidDate,
-                    PhuongThucThanhToan = dbc.PaymentMethods.FirstOrDefault(p => p.PaymentMethodId == paymentMethodId)?.PaymentMethodName,
-                    TienThua = paymentMethodId == 1 ? tienKhachGui - bill.TotalPrice : null
-                }
-            });
+                return StatusCode(500, new { message = "Template không tồn tại trên server!" });
+            }
+
+            Document doc = new Document();
+            doc.LoadFromFile(templatePath);
+
+            var branch = dbc.Branches.FirstOrDefault(x => x.BranchId == bill.BranchId);
+            string branchName = branch?.BranchName ?? "";
+            string branchAddr = branch?.BranchAddr ?? "";
+            string branchPhone = branch?.NumberPhone ?? "";
+
+            string tableNumber = table?.TableNumber.ToString() ?? bill.TableId.ToString();
+            string billIdStr = bill.BillId.ToString();
+
+            string timeInStr = bill.Created!.Value.ToString("HH:mm", CultureInfo.GetCultureInfo("vi-VN"));
+            string timeOutStr = bill.PaidDate.Value.ToString("HH:mm", CultureInfo.GetCultureInfo("vi-VN"));
+
+            string dateStr = bill.PaidDate.Value.ToString("dd/MM/yyyy", CultureInfo.GetCultureInfo("vi-VN"));
+
+            string totalStr = FormatCurrency(bill.TotalPrice);
+            string paymentMethodName = dbc.PaymentMethods
+                .Where(p => p.PaymentMethodId == paymentMethodId)
+                .Select(p => p.PaymentMethodName)
+                .FirstOrDefault() ?? "";
+
+            string moneyReceivedStr = "";
+            string changeStr = "";
+            if (paymentMethodId == 1)
+            {
+                var tienKhach = tienKhachGui ?? 0m;
+                moneyReceivedStr = FormatCurrency(tienKhach);
+                var thoi = tienKhach - bill.TotalPrice;
+                changeStr = FormatCurrency(thoi < 0 ? 0 : thoi);
+            }
+
+            var sbFoodCombo = new StringBuilder();
+            var sbQty = new StringBuilder();
+            var sbPrice = new StringBuilder();
+            var sbSubTotal = new StringBuilder();
+
+            foreach (var bi in bill.BillItems)
+            {
+                var line = bi.Food.FoodName
+           + (string.IsNullOrWhiteSpace(bi.Description) ? "" : $" - {bi.Description}");
+                sbFoodCombo.AppendLine(line);
+
+                sbQty.AppendLine(bi.Quantity.ToString());
+
+                sbPrice.AppendLine(FormatCurrency(bi.Food.Price));
+
+                sbSubTotal.AppendLine(FormatCurrency(bi.SubTotal));
+            }
+
+            doc.Replace("${branchName}", branchName, false, true);
+            doc.Replace("${branchAddr}", branchAddr, false, true);
+            doc.Replace("${numberPhone}", branchPhone, false, true);
+
+            doc.Replace("${tableNumber}", tableNumber, false, true);
+            doc.Replace("${date}", dateStr, false, true);
+            doc.Replace("${billId}", billIdStr, false, true);
+
+            doc.Replace("${timeIn}", timeInStr, false, true);
+            doc.Replace("${timeOut}", timeOutStr, false, true);
+
+            doc.Replace("${total}", totalStr, false, true);
+            doc.Replace("${paymentMethod}", paymentMethodName, false, true);
+            doc.Replace("${money}", moneyReceivedStr, false, true);
+            doc.Replace("${change}", changeStr, false, true);
+
+            doc.Replace("${foodName}", sbFoodCombo.ToString(), false, true);
+            doc.Replace("${qty}", sbQty.ToString(), false, true);
+            doc.Replace("${price}", sbPrice.ToString(), false, true);
+            doc.Replace("${subTotal}", sbSubTotal.ToString(), false, true);
+
+            using (var pdfStream = new MemoryStream())
+            {
+                doc.SaveToStream(pdfStream, FileFormat.PDF);
+                pdfStream.Seek(0, SeekOrigin.Begin);
+                return File(pdfStream.ToArray(), "application/pdf", $"{billIdStr}.pdf");
+            }
+        }
+
+        private string FormatCurrency(decimal value)
+        {
+            long n = Convert.ToInt64(Math.Round(value, 0));
+            var s = n.ToString();
+            var rgx = new System.Text.RegularExpressions.Regex(@"\B(?=(\d{3})+(?!\d))");
+            var formatted = rgx.Replace(s, ".");
+            return $"{formatted}₫";
         }
     }
 }
