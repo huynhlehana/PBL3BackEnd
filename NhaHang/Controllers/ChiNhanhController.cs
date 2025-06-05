@@ -110,12 +110,21 @@ namespace NhaHang.Controllers
             var cn = dbc.Branches.Find(ID);
             if (cn == null)
                 return NotFound(new { message = "Chi nhánh không tồn tại!" });
+
             var banTrongChiNhanh = dbc.Tables.Where(t => t.BranchId == ID).ToList();
+            var billTrongBan = dbc.Bills.Where(b => banTrongChiNhanh.Select(t => t.TableId).Contains(b.TableId)).ToList();
+            var billItemTrongBill = dbc.BillItems.Where(bi => billTrongBan.Select(b => b.BillId).Contains(bi.BillId)).ToList();
+
+            dbc.BillItems.RemoveRange(billItemTrongBill);
+            dbc.Bills.RemoveRange(billTrongBan);
             dbc.Tables.RemoveRange(banTrongChiNhanh);
+
             var nhanVienTrongChiNhanh = dbc.Users.Where(u => u.BranchId == ID).ToList();
             dbc.Users.RemoveRange(nhanVienTrongChiNhanh);
+
             dbc.Branches.Remove(cn);
             dbc.SaveChanges();
+
             return Ok(new { message = "Xóa chi nhánh thành công!", data = cn });
         }
     }

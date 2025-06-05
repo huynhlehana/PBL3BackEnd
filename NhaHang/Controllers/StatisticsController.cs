@@ -477,6 +477,17 @@ namespace NhaHang.Controllers
                 _ => today
             };
 
+            if (range == TimeRange.TwelveWeek && startDate.DayOfWeek != DayOfWeek.Monday)
+            {
+                int offset = ((int)startDate.DayOfWeek + 6) % 7;
+                startDate = startDate.AddDays(-offset);
+                if (today.DayOfWeek != DayOfWeek.Sunday)
+                {
+                    int offsetToSunday = (int)today.DayOfWeek;
+                    today = today.AddDays(-offsetToSunday);
+                }
+            }
+
             var allBranches = dbc.Branches.ToList();
 
             var billItems = dbc.BillItems

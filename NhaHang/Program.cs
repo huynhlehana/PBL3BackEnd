@@ -6,15 +6,19 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-//builder.WebHost
-       //.ConfigureKestrel(options =>
-       //{
-       //    options.ListenAnyIP(5000);
-       //});
+builder.WebHost
+       .ConfigureKestrel(options =>
+       {
+           options.ListenAnyIP(5000);
+       });
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.Preserve;
+    options.JsonSerializerOptions.WriteIndented = true;
+});
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>

@@ -141,28 +141,30 @@ namespace NhaHang.Controllers
                 return Unauthorized(new { message = "Không xác định được người dùng!" });
 
             var dm = dbc.Tables.Find(ID);
-            
-            if (role != "Quản lý tổng" && currentUser.BranchId != dm.BranchId)
-                return Unauthorized(new { message = "Bạn không có quyền xóa bàn của chi nhánh này!" });
-            
             if (dm == null)
                 return NotFound(new { message = "Bàn không tồn tại!" });
 
-            if (dm.TableId != 1)
-                return BadRequest(new { message = "Chỉ được phép xóa bàn đang trống" });
+            if (role != "Quản lý tổng" && currentUser.BranchId != dm.BranchId)
+                return Unauthorized(new { message = "Bạn không có quyền xóa bàn của chi nhánh này!" });
 
-            var bill = dbc.Bills.FirstOrDefault(b => b.TableId == ID && b.Table.StatusId == 3);
-            if (bill != null)
+            var bills = dbc.Bills.Where(b => b.TableId == ID).ToList();
+            foreach (var bill in bills)
             {
-                var billDetails = dbc.BillItems.Where(d => d.BillId == bill.BillId).ToList();
-                if (billDetails.Any())
-                    dbc.BillItems.RemoveRange(billDetails);
+                var billItems = dbc.BillItems.Where(bi => bi.BillId == bill.BillId).ToList();
+                if (billItems.Any())
+                {
+                    dbc.BillItems.RemoveRange(billItems);
+                }
+            }
 
-                dbc.Bills.Remove(bill);
+            if (bills.Any())
+            {
+                dbc.Bills.RemoveRange(bills);
             }
 
             dbc.Tables.Remove(dm);
             dbc.SaveChanges();
+
             return Ok(new { message = "Xóa bàn thành công!", data = dm });
         }
     }

@@ -635,6 +635,20 @@ namespace NhaHang.Controllers
                 _ => today
             };
 
+            if (range == TimeRange1.TwelveWeek)
+            {
+                if (startDate.DayOfWeek != DayOfWeek.Monday)
+                {
+                    int offset = ((int)startDate.DayOfWeek + 6) % 7;
+                    startDate = startDate.AddDays(-offset);
+                }
+                if (today.DayOfWeek != DayOfWeek.Sunday)
+                {
+                    int offsetToSunday = (int)today.DayOfWeek;
+                    today = today.AddDays(-offsetToSunday);
+                }
+            }
+
             var doanhThu = dbc.BillItems
                 .Include(bi => bi.Bill)
                 .Include(bi => bi.Food)
@@ -661,11 +675,6 @@ namespace NhaHang.Controllers
                         .Select(weekOffset =>
                         {
                             var weekStart = startDate.AddDays(weekOffset * 7);
-                            if (weekStart.DayOfWeek != DayOfWeek.Monday)
-                            {
-                                int offset = ((int)weekStart.DayOfWeek + 6) % 7;
-                                weekStart = weekStart.AddDays(-offset);
-                            }
                             var weekEnd = weekStart.AddDays(6);
 
                             return new
@@ -674,7 +683,7 @@ namespace NhaHang.Controllers
                                 TongDoanhThu = doanhThu
                                     .Where(bi => bi.Bill.PaidDate.Value.Date >= weekStart.Date
                                               && bi.Bill.PaidDate.Value.Date <= weekEnd.Date)
-                                    .Sum(x => x.Quantity * x.Food.Price)
+                                    .Sum(bi => bi.Quantity * (bi.Food?.Price ?? 0))
                             };
                         }).ToList<object>(),
 
