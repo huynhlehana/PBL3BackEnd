@@ -165,7 +165,7 @@ namespace NhaHang.Controllers
             dbc.Tables.Remove(dm);
             dbc.SaveChanges();
 
-            return Ok(new { message = "Xóa bàn thành công!", data = dm });
+            return Ok(new { message = "Xóa bàn thành công!", tableId = dm.TableId });
         }
     }
 }
